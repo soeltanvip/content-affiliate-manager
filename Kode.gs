@@ -14,7 +14,7 @@ function setupDatabase() {
   const tables = [
     {
       name: 'produk',
-      headers: ['id', 'kode_produk', 'nama', 'kategori', 'cover_url', 'link_affiliate', 'link_dashboard', 'created_at']
+      headers: ['id', 'kode_produk', 'nama', 'kategori', 'cover_url', 'link_dashboard', 'created_at']
     },
     {
       name: 'media',
@@ -109,9 +109,8 @@ function getProductsInternal() {
       nama: String(row[2] || ''),
       kategori: String(row[3] || ''),
       cover_url: String(row[4] || ''),
-      link_affiliate: String(row[5] || ''),
-      link_dashboard: String(row[6] || ''),
-      created_at: row[7] instanceof Date ? row[7].toISOString() : String(row[7] || ''),
+      link_dashboard: String(row[5] || ''),
+      created_at: row[6] instanceof Date ? row[6].toISOString() : String(row[6] || ''),
       media_count: mediaCountMap[pid] || 0
     });
   }
@@ -147,12 +146,12 @@ function saveProduct(payload) {
         }
       }
       if (rowIndex !== -1) {
-        sheet.getRange(rowIndex, 2, 1, 6).setValues([[
+        // ponytail: index kolom 2-6 (5 kolom: kode, nama, kategori, cover, dashboard)
+        sheet.getRange(rowIndex, 2, 1, 5).setValues([[
           payload.kode_produk,
           payload.nama,
           payload.kategori || '',
           payload.cover_url || '',
-          payload.link_affiliate || '',
           payload.link_dashboard || ''
         ]]);
         return { ok: true, success: true, message: 'Produk berhasil diubah.' };
@@ -167,7 +166,6 @@ function saveProduct(payload) {
       payload.nama,
       payload.kategori || '',
       payload.cover_url || '',
-      payload.link_affiliate || '',
       payload.link_dashboard || '',
       nowStr
     ]);
