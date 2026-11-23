@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DanDaf Affiliate Content Manager</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Material Symbols Outlined -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      vertical-align: middle;
+      font-size: 20px;
+    }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col md:flex-row" x-data="app()" x-init="initApp()" x-cloak>
+
+  <!-- SIDEBAR NAVIGASI -->
+  <aside class="w-full md:w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
+    <!-- Header Brand -->
+    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="material-symbols-outlined text-blue-900 text-2xl">storefront</span>
+        <span class="font-bold text-lg text-blue-950">DanDaf Manager</span>
+      </div>
+      <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden text-slate-600 hover:text-slate-900">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+    </div>
+
+    <!-- Nav Links -->
+    <nav :class="mobileMenuOpen ? 'block' : 'hidden'" class="p-3 space-y-1 md:block flex-1">
+      <button @click="activeTab = 'produk'; selectedProduct = null; mobileMenuOpen = false" 
+        :class="activeTab === 'produk' ? 'bg-blue-900 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'"
+        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
+        <span class="material-symbols-outlined">inventory_2</span>
+        <span>Produk & Media</span>
+      </button>
+
+      <button @click="activeTab = 'postingan'; mobileMenuOpen = false" 
+        :class="activeTab === 'postingan' ? 'bg-blue-900 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'"
+        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
+        <span class="material-symbols-outlined">edit_note</span>
+        <span>Postingan</span>
+      </button>
+
+      <button @click="activeTab = 'persetujuan'; mobileMenuOpen = false" 
+        :class="activeTab === 'persetujuan' ? 'bg-blue-900 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'"
+        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
+        <span class="material-symbols-outlined">fact_check</span>
+        <span>Persetujuan</span>
+      </button>
+
+      <button @click="activeTab = 'jadwal'; mobileMenuOpen = false" 
+        :class="activeTab === 'jadwal' ? 'bg-blue-900 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'"
+        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
+        <span class="material-symbols-outlined">calendar_month</span>
+        <span>Jadwal Tayang</span>
+      </button>
+
+      <button @click="activeTab = 'akun'; mobileMenuOpen = false" 
+        :class="activeTab === 'akun' ? 'bg-blue-900 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'"
+        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
+        <span class="material-symbols-outlined">account_circle</span>
+        <span>Akun</span>
+      </button>
+
+      <button @click="activeTab = 'pengaturan'; mobileMenuOpen = false" 
+        :class="activeTab === 'pengaturan' ? 'bg-blue-900 text-white font-medium' : 'text-slate-600 hover:bg-slate-100'"
+        class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
+        <span class="material-symbols-outlined">settings</span>
+        <span>Pengaturan</span>
+      </button>
+    </nav>
+
+    <!-- Footer Sidebar -->
+    <div class="p-3 border-t border-slate-100 hidden md:block">
+      <div class="text-xs text-slate-400">DanDaf Content Suite v1.0</div>
+    </div>
+  </aside>
+
+  <!-- KONTEN UTAMA -->
+  <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+
+    <!-- BANNER PENGINGAT -->
+    <div x-show="!settings.cloudinary_cloud_name || !settings.cloudinary_preset" class="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 flex items-start space-x-3">
+      <span class="material-symbols-outlined text-amber-600 shrink-0 mt-0.5">warning</span>
+      <div class="text-sm">
+        <strong class="font-semibold">Konfigurasi Cloudinary Belum Lengkap!</strong> 
+        Silakan lengkapi Cloud Name dan Upload Preset di tab 
+        <button @click="activeTab = 'pengaturan'" class="underline font-bold hover:text-amber-950">Pengaturan</button> 
+        untuk mengaktifkan fitur unggah media.
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 1: PRODUK & MEDIA                          -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'produk'">
+
+      <!-- TAMPILAN 1A: DAFTAR KATALOG PRODUK -->
+      <div x-show="!selectedProduct">
+        <!-- Toolbar Atas -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-slate-900">Katalog Produk</h1>
+            <p class="text-sm text-slate-500">Kelola master data produk dan koleksi media affiliate.</p>
+          </div>
+          <button @click="openProductModal()" class="inline-flex items-center justify-center space-x-2 bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm">
+            <span class="material-symbols-outlined">add</span>
+            <span>Tambah Produk</span>
+          </button>
+        </div>
+
+        <!-- Filter & Search -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <div class="sm:col-span-2 relative">
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400">search</span>
+            <input type="text" x-model="searchQuery" placeholder="Cari nama atau kode produk..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent bg-white">
+          </div>
+          <div>
+            <select x-model="selectedCategory" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 bg-white">
+              <option value="">Semua Kategori</option>
+              <template x-for="cat in categories" :key="cat">
+                <option :value="cat" x-text="cat"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <!-- Skeleton Loader Saat Memuat -->
+        <div x-show="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <template x-for="i in [1,2,3]" :key="i">
+            <div class="border border-slate-200 rounded-lg p-4 bg-white animate-pulse">
+              <div class="w-full h-40 bg-slate-200 rounded-md mb-3"></div>
+              <div class="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+              <div class="h-3 bg-slate-200 rounded w-1/2"></div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Grid Produk -->
+        <div x-show="!isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <template x-for="prod in filteredProducts" :key="prod.id">
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between hover:border-slate-300 transition">
+              <div>
+                <!-- Cover Image -->
+                <div class="h-44 w-full bg-slate-100 relative overflow-hidden flex items-center justify-center">
+                  <template x-if="prod.cover_url">
+                    <img :src="prod.cover_url" :alt="prod.nama" class="w-full h-full object-cover">
+                  </template>
+                  <template x-if="!prod.cover_url">
+                    <div class="text-slate-400 flex flex-col items-center">
+                      <span class="material-symbols-outlined text-4xl">image_not_supported</span>
+                      <span class="text-xs mt-1">Tanpa Gambar</span>
+                    </div>
+                  </template>
+                  <span class="absolute top-2 left-2 bg-slate-900/80 text-white font-mono text-xs px-2 py-0.5 rounded" x-text="prod.kode_produk"></span>
+                  <span class="absolute top-2 right-2 bg-white/90 text-slate-800 text-xs px-2 py-0.5 rounded font-medium border border-slate-200" x-text="prod.kategori || 'Umum'"></span>
+                </div>
+
+                <!-- Info Produk -->
+                <div class="p-4">
+                  <h3 class="font-bold text-slate-900 text-base mb-1 line-clamp-1" x-text="prod.nama"></h3>
+                  <div class="flex items-center text-xs text-slate-500 mb-3 space-x-2">
+                    <span class="flex items-center">
+                      <span class="material-symbols-outlined text-sm mr-1">perm_media</span>
+                      <span x-text="(prod.media_count || 0) + ' Aset Media'"></span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Aksi Kartu -->
+              <div class="p-4 pt-0 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
+                <button @click="viewProductMedia(prod)" class="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold py-2 px-3 rounded flex items-center justify-center space-x-1 transition">
+                  <span class="material-symbols-outlined text-sm">folder_open</span>
+                  <span>Detail & Media</span>
+                </button>
+                <template x-if="prod.link_dashboard">
+                  <a :href="prod.link_dashboard" target="_blank" class="p-2 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Buka Dashboard Shopee">
+                    <span class="material-symbols-outlined text-base">open_in_new</span>
+                  </a>
+                </template>
+                <button @click="editProduct(prod)" class="p-2 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Ubah Data">
+                  <span class="material-symbols-outlined text-base">edit</span>
+                </button>
+                <button @click="confirmDeleteProduct(prod)" class="p-2 text-rose-600 hover:bg-rose-50 rounded border border-rose-100" title="Hapus Produk">
+                  <span class="material-symbols-outlined text-base">delete</span>
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Status Kosong -->
+        <div x-show="!isLoading && filteredProducts.length === 0" class="text-center py-12 bg-white rounded-lg border border-slate-200">
+          <span class="material-symbols-outlined text-5xl text-slate-300">inventory</span>
+          <p class="mt-2 text-slate-600 text-sm font-medium">Belum ada produk yang ditemukan.</p>
+          <button @click="openProductModal()" class="mt-3 text-xs bg-blue-900 text-white px-3 py-1.5 rounded font-medium">Tambah Produk Baru</button>
+        </div>
+      </div>
+
+      <!-- TAMPILAN 1B: DETAIL PRODUK & MEDIA BATCH -->
+      <div x-show="selectedProduct">
+        <!-- Breadcrumb / Tombol Kembali -->
+        <div class="flex items-center justify-between mb-4">
+          <button @click="selectedProduct = null" class="inline-flex items-center space-x-1 text-sm font-medium text-slate-600 hover:text-slate-900">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span>Kembali ke Daftar Produk</span>
+          </button>
+          <button @click="openBatchUploadModal()" class="inline-flex items-center space-x-2 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+            <span class="material-symbols-outlined text-sm">cloud_upload</span>
+            <span>Upload Batch Baru</span>
+          </button>
+        </div>
+
+        <!-- Kartu Ringkasan Produk -->
+        <div class="bg-white border border-slate-200 rounded-lg p-4 md:p-6 mb-6">
+          <div class="flex flex-col md:flex-row gap-4 items-start justify-between">
+            <div>
+              <div class="flex items-center space-x-2 mb-1">
+                <span class="font-mono text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold" x-text="selectedProduct ? selectedProduct.kode_produk : ''"></span>
+                <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded" x-text="selectedProduct ? selectedProduct.kategori : ''"></span>
+              </div>
+              <h2 class="text-xl font-bold text-slate-900" x-text="selectedProduct ? selectedProduct.nama : ''"></h2>
+            </div>
+            <!-- Quick Actions -->
+            <div class="flex flex-wrap items-center gap-2">
+              <template x-if="selectedProduct && selectedProduct.link_affiliate">
+                <button @click="copyText(selectedProduct.link_affiliate, 'Link Affiliate tersalin!')" class="inline-flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded border border-slate-200 font-medium">
+                  <span class="material-symbols-outlined text-sm">content_copy</span>
+                  <span>Salin Link Affiliate</span>
+                </button>
+              </template>
+              <template x-if="selectedProduct && selectedProduct.link_dashboard">
+                <a :href="selectedProduct.link_dashboard" target="_blank" class="inline-flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded border border-slate-200 font-medium">
+                  <span class="material-symbols-outlined text-sm">launch</span>
+                  <span>Shopee</span>
+                </a>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Daftar Batch Media -->
+        <div class="space-y-6">
+          <!-- Loading Media -->
+          <div x-show="isLoadingMedia" class="p-8 text-center bg-white rounded-lg border border-slate-200">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-900 border-t-transparent"></div>
+            <p class="text-xs text-slate-500 mt-2">Memuat aset media...</p>
+          </div>
+
+          <!-- Kosong -->
+          <div x-show="!isLoadingMedia && productBatches.length === 0" class="text-center py-12 bg-white rounded-lg border border-slate-200">
+            <span class="material-symbols-outlined text-5xl text-slate-300">perm_media</span>
+            <p class="mt-2 text-slate-600 text-sm font-medium">Belum ada aset media pada produk ini.</p>
+            <button @click="openBatchUploadModal()" class="mt-3 text-xs bg-blue-900 text-white px-3 py-2 rounded font-medium">Unggah Batch Pertama</button>
+          </div>
+
+          <!-- Per Batch Group -->
+          <template x-for="batch in productBatches" :key="batch.batch_id">
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <!-- Header Batch -->
+              <div class="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div class="flex items-center space-x-3">
+                  <span class="font-bold text-slate-800 text-sm" x-text="batch.batch_nama"></span>
+                  <!-- Badge Tipe Konten -->
+                  <span :class="{
+                    'bg-emerald-100 text-emerald-800': batch.content_type === 'ORI',
+                    'bg-amber-100 text-amber-800': batch.content_type === 'DOWNLOAD',
+                    'bg-sky-100 text-sky-800': batch.content_type === 'EDIT'
+                  }" class="text-xs px-2 py-0.5 rounded font-semibold" x-text="batch.content_type"></span>
+                  <span class="text-xs text-slate-400" x-text="batch.items.length + ' Item'"></span>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <button @click="copyBatchLinks(batch)" class="text-xs bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-1.5 rounded flex items-center space-x-1">
+                    <span class="material-symbols-outlined text-sm">content_copy</span>
+                    <span>Salin Semua URL</span>
+                  </button>
+                  <button @click="confirmDeleteBatch(batch.batch_id)" class="text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded flex items-center space-x-1">
+                    <span class="material-symbols-outlined text-sm">delete</span>
+                    <span>Hapus Batch</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Media Grid dalam Batch -->
+              <div class="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <template x-for="item in batch.items" :key="item.id">
+                  <div class="border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between group bg-slate-50">
+                    <div class="aspect-square relative flex items-center justify-center bg-black/5 overflow-hidden">
+                      <template x-if="item.media_type === 'FOTO'">
+                        <img :src="item.media_url" class="w-full h-full object-cover">
+                      </template>
+                      <template x-if="item.media_type === 'VIDEO'">
+                        <div class="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-white relative">
+                          <span class="material-symbols-outlined text-4xl">play_circle</span>
+                          <span class="text-[10px] text-slate-300 mt-1">Video</span>
+                        </div>
+                      </template>
+                      <span class="absolute top-1 left-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/70 text-white" x-text="item.media_type"></span>
+                    </div>
+
+                    <!-- Tombol Aksi Item -->
+                    <div class="p-2 bg-white border-t border-slate-100 flex items-center justify-between text-xs">
+                      <button @click="copyText(item.media_url, 'URL Media Tersalin!')" class="text-slate-600 hover:text-blue-900" title="Salin URL Media">
+                        <span class="material-symbols-outlined text-base">link</span>
+                      </button>
+                      <a :href="item.media_url" target="_blank" download class="text-slate-600 hover:text-blue-900" title="Unduh Berkas">
+                        <span class="material-symbols-outlined text-base">download</span>
+                      </a>
+                      <button @click="confirmDeleteMedia(item.id)" class="text-rose-600 hover:text-rose-800" title="Hapus Berkas">
+                        <span class="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 2: POSTINGAN                               -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'postingan'">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">Komposer Postingan</h1>
+        <p class="text-sm text-slate-500">Susun konten promosi Facebook dengan validasi media dan tracking otomatis.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Form Postingan -->
+        <div class="lg:col-span-2 bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Pilih Produk</label>
+            <select x-model="composer.productId" @change="onComposerProductChange()" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <option value="">-- Pilih Produk --</option>
+              <template x-for="p in products" :key="p.id">
+                <option :value="p.id" x-text="p.kode_produk + ' - ' + p.nama"></option>
+              </template>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Tanggal Rencana Tayang</label>
+            <input type="date" x-model="composer.date" @change="generateTrackingCode()" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Kode Tracking Sub-ID (Otomatis)</label>
+            <div class="flex items-center space-x-2">
+              <input type="text" x-model="composer.trackingCode" readonly class="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-sm font-mono font-bold text-blue-900">
+              <button @click="copyText(composer.trackingCode, 'Tracking code tersalin!')" class="p-2 border border-slate-200 rounded-lg hover:bg-slate-100">
+                <span class="material-symbols-outlined text-base">content_copy</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Template Caption</label>
+            <textarea x-model="composer.caption" rows="5" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="Tulis caption promosi..."></textarea>
+          </div>
+
+          <!-- Peringatan Aturan Facebook -->
+          <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+            <strong>Aturan Media Facebook:</strong> Hindari mencampur Foto dan Video dalam 1 post. Gunakan murni teks, 1 video tunggal, atau 1-10 foto.
+          </div>
+        </div>
+
+        <!-- Kolom Pratinjau Samping -->
+        <div class="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between">
+          <div>
+            <h3 class="font-bold text-slate-900 text-sm mb-3">Pratinjau Postingan</h3>
+            <div class="bg-slate-50 border border-slate-200 rounded p-3 text-xs font-mono whitespace-pre-wrap text-slate-800" x-text="previewCaptionText"></div>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-100">
+            <button @click="copyText(previewCaptionText, 'Caption lengkap tersalin!')" class="w-full bg-blue-900 hover:bg-blue-800 text-white py-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1">
+              <span class="material-symbols-outlined text-sm">content_copy</span>
+              <span>Salin Teks Lengkap</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 3: PERSETUJUAN & JADWAL TAYANG             -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'persetujuan' || activeTab === 'jadwal'">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900" x-text="activeTab === 'persetujuan' ? 'Persetujuan Konten' : 'Jadwal Tayang (Kuota 3/Hari)'"></h1>
+          <p class="text-sm text-slate-500">Antrean status konten sebelum tayang di Facebook.</p>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-lg p-6 text-center py-12">
+        <span class="material-symbols-outlined text-5xl text-slate-300">calendar_today</span>
+        <h3 class="text-base font-bold text-slate-700 mt-2">Manajemen Penjadwalan Siap Digunakan</h3>
+        <p class="text-xs text-slate-500 max-w-md mx-auto mt-1">Kuota maksimal 3 postingan per hari diterapkan guna menjaga reputasi halaman Facebook dari algoritma spam.</p>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 4: AKUN                                    -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'akun'">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">Profil & Akun</h1>
+        <p class="text-sm text-slate-500">Kelola akun tunggal pengelola DanDaf Affiliate.</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-lg p-6 max-w-lg">
+        <div class="flex items-center space-x-4 mb-4">
+          <div class="w-12 h-12 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-lg">DD</div>
+          <div>
+            <div class="font-bold text-slate-900">DanDaf Operator</div>
+            <div class="text-xs text-slate-500">Single Operator Workspace</div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-600">Aplikasi dikonfigurasi untuk single-admin guna meminimalisir overhead login dan menjamin kecepatan kerja harian.</p>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- TAB 5: PENGATURAN (SETTINGS)                   -->
+    <!-- ============================================== -->
+    <div x-show="activeTab === 'pengaturan'">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">Pengaturan Sistem</h1>
+        <p class="text-sm text-slate-500">Konfigurasi Cloudinary dan parameter tracking affiliate.</p>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-lg p-6 max-w-xl">
+        <form @submit.prevent="saveSettings()">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Cloudinary Cloud Name *</label>
+              <input type="text" x-model="settings.cloudinary_cloud_name" required placeholder="Contoh: dandaf-store" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <span class="text-[11px] text-slate-400">Ditemukan di Dashboard Akun Cloudinary Anda.</span>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Cloudinary Upload Preset (Unsigned) *</label>
+              <input type="text" x-model="settings.cloudinary_preset" required placeholder="Contoh: ml_default atau dandaf_unsigned" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <span class="text-[11px] text-slate-400">Pastikan preset bertipe "Unsigned" pada menu Cloudinary Settings -> Upload.</span>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Cloudinary API Key (Opsional)</label>
+              <input type="text" x-model="settings.cloudinary_api_key" placeholder="Contoh: 123456789012345" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Prefix Kode Tracking Sub-ID</label>
+              <input type="text" x-model="settings.tracking_prefix" required placeholder="DANDAF" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-white">
+              <span class="text-[11px] text-slate-400">Format: [PREFIX]_[YYMMDD]_[SEQ] (Misal: DANDAF_240520_001)</span>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+              <button type="button" @click="checkCloudinaryConfig()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-medium">
+                Cek Konfigurasi Cloudinary
+              </button>
+              <button type="submit" :disabled="isSavingSettings" class="bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center space-x-1">
+                <span x-show="isSavingSettings" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                <span>Simpan Pengaturan</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ============================================== -->
+  <!-- MODAL 1: FORM PRODUK (TAMBAH / EDIT)           -->
+  <!-- ============================================== -->
+  <div x-show="productModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative" @click.away="productModalOpen = false">
+      <h3 class="text-lg font-bold text-slate-900 mb-4" x-text="productForm.id ? 'Ubah Data Produk' : 'Tambah Produk Baru'"></h3>
+      
+      <form @submit.prevent="submitProductForm()" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nama Produk *</label>
+          <input type="text" x-model="productForm.nama" required placeholder="Contoh: Kemeja Linen Pria" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Kode Produk / SKU *</label>
+          <input type="text" x-model="productForm.kode_produk" required placeholder="Contoh: SHP-001" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono uppercase bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Kategori</label>
+          <input type="text" x-model="productForm.kategori" placeholder="Contoh: Fashion, Elektronik, Rumah Tangga" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">URL Cover / Thumbnail (Opsional)</label>
+          <input type="url" x-model="productForm.cover_url" placeholder="https://..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Link Affiliate Dasar Shopee</label>
+          <input type="url" x-model="productForm.link_affiliate" placeholder="https://shope.ee/..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Link Dashboard Shopee</label>
+          <input type="url" x-model="productForm.link_dashboard" placeholder="https://affiliate.shopee.co.id/..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+          <button type="button" @click="productModalOpen = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg">Batal</button>
+          <button type="submit" :disabled="isSavingProduct" class="px-4 py-2 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center space-x-1">
+            <span x-show="isSavingProduct" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            <span>Simpan Produk</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL 2: UPLOAD BATCH MEDIA KE CLOUDINARY     -->
+  <!-- ============================================== -->
+  <div x-show="batchModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-lg w-full border border-slate-200 p-6 shadow-xl relative" @click.away="!isUploadingMedia && (batchModalOpen = false)">
+      <h3 class="text-lg font-bold text-slate-900 mb-1">Upload Batch Media Langsung</h3>
+      <p class="text-xs text-slate-500 mb-4">Berkas diunggah langsung dari peramban ke Cloudinary.</p>
+
+      <form @submit.prevent="submitBatchUpload()" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nama Batch *</label>
+          <input type="text" x-model="batchForm.batchNama" required placeholder="Misal: Review Unboxing Mei" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Jenis Konten *</label>
+            <select x-model="batchForm.contentType" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <option value="ORI">ORI (Original Content)</option>
+              <option value="DOWNLOAD">DOWNLOAD (Materi Mentah)</option>
+              <option value="EDIT">EDIT (Hasil Re-edit)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Catatan Tambahan</label>
+            <input type="text" x-model="batchForm.catatan" placeholder="Opsional" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Berkas (Foto / Video) *</label>
+          <input type="file" id="batchFileInput" multiple accept="image/*,video/*" @change="onFilesSelected($event)" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100">
+          <div class="text-[11px] text-slate-400 mt-1" x-text="selectedFiles.length + ' berkas dipilih.'"></div>
+        </div>
+
+        <!-- Progress Bar Saat Mengunggah -->
+        <div x-show="isUploadingMedia" class="space-y-1">
+          <div class="flex justify-between text-xs font-bold text-slate-600">
+            <span x-text="uploadStatusText"></span>
+            <span x-text="uploadProgressPercent + '%'"></span>
+          </div>
+          <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+            <div class="bg-blue-900 h-2 rounded-full transition-all duration-300" :style="'width: ' + uploadProgressPercent + '%'"></div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+          <button type="button" :disabled="isUploadingMedia" @click="batchModalOpen = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg">Batal</button>
+          <button type="submit" :disabled="isUploadingMedia || selectedFiles.length === 0" class="px-4 py-2 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center space-x-1">
+            <span x-show="isUploadingMedia" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            <span>Mulai Unggah</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL 3: DIALOG KONFIRMASI (PENGGANTI ALERT)   -->
+  <!-- ============================================== -->
+  <div x-show="confirmDialog.open" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-sm w-full border border-slate-200 p-5 shadow-xl relative" @click.away="confirmDialog.open = false">
+      <div class="flex items-center space-x-3 mb-3 text-rose-600">
+        <span class="material-symbols-outlined text-2xl">warning</span>
+        <h4 class="font-bold text-slate-900 text-sm" x-text="confirmDialog.title"></h4>
+      </div>
+      <p class="text-xs text-slate-600 mb-5 leading-relaxed" x-text="confirmDialog.message"></p>
+      <div class="flex justify-end space-x-2">
+        <button type="button" @click="confirmDialog.open = false" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded">Batal</button>
+        <button type="button" @click="executeConfirmAction()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded">Hapus</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- NOTIFIKASI TOAST (COPY / STATUS)               -->
+  <!-- ============================================== -->
+  <div x-show="toast.visible" 
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="opacity-0 translate-y-2"
+    x-transition:enter-end="opacity-100 translate-y-0"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100 translate-y-0"
+    x-transition:leave-end="opacity-0 translate-y-2"
+    class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg flex items-center space-x-2">
+    <span class="material-symbols-outlined text-emerald-400 text-sm">check_circle</span>
+    <span x-text="toast.message"></span>
+  </div>
+
+  <!-- SCRIPT LOGIKA APLIKASI (ALPINE.JS) -->
+  <script>
+    function app() {
+      return {
+        activeTab: 'produk',
+        mobileMenuOpen: false,
+        isLoading: false,
+        isLoadingMedia: false,
+        isSavingProduct: false,
+        isSavingSettings: false,
+        isUploadingMedia: false,
+
+        // Data Store
+        products: [],
+        categories: [],
+        selectedProduct: null,
+        productBatches: [],
+        settings: {
+          cloudinary_cloud_name: '',
+          cloudinary_preset: '',
+          cloudinary_api_key: '',
+          tracking_prefix: 'DANDAF'
+        },
+
+        // Filter Produk
+        searchQuery: '',
+        selectedCategory: '',
+
+        // Form Produk State
+        productModalOpen: false,
+        productForm: {
+          id: '',
+          nama: '',
+          kode_produk: '',
+          kategori: '',
+          cover_url: '',
+          link_affiliate: '',
+          link_dashboard: ''
+        },
+
+        // Form Batch Media State
+        batchModalOpen: false,
+        batchForm: {
+          batchNama: '',
+          contentType: 'ORI',
+          catatan: ''
+        },
+        selectedFiles: [],
+        uploadProgressPercent: 0,
+        uploadStatusText: '',
+
+        // Komposer State
+        composer: {
+          productId: '',
+          date: new Date().toISOString().substring(0, 10),
+          trackingCode: '',
+          caption: ''
+        },
+
+        // Dialog Konfirmasi
+        confirmDialog: {
+          open: false,
+          title: '',
+          message: '',
+          action: null
+        },
+
+        // Toast State
+        toast: {
+          visible: false,
+          message: ''
+        },
+
+        initApp: function() {
+          this.loadInitialData();
+        },
+
+        showToast: function(msg) {
+          var self = this;
+          this.toast.message = msg;
+          this.toast.visible = true;
+          setTimeout(function() {
+            self.toast.visible = false;
+          }, 3000);
+        },
+
+        copyText: function(text, successMsg) {
+          if (!text) return;
+          var self = this;
+          navigator.clipboard.writeText(text).then(function() {
+            self.showToast(successMsg || 'Tersalin ke clipboard!');
+          });
+        },
+
+        loadInitialData: function() {
+          var self = this;
+          this.isLoading = true;
+          google.script.run
+            .withSuccessHandler(function(response) {
+              self.isLoading = false;
+              if (response && response.ok && response.data) {
+                self.products = response.data.products || [];
+                self.settings = Object.assign(self.settings, response.data.settings || {});
+                self.extractCategories();
+              } else {
+                self.showToast('Gagal memuat data: ' + (response.message || 'Terjadi galat'));
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isLoading = false;
+              self.showToast('Koneksi gagal: ' + err.message);
+            })
+            .getInitialData();
+        },
+
+        extractCategories: function() {
+          var set = {};
+          for (var i = 0; i < this.products.length; i++) {
+            if (this.products[i].kategori) {
+              set[this.products[i].kategori] = true;
+            }
+          }
+          this.categories = Object.keys(set);
+        },
+
+        get filteredProducts() {
+          var q = this.searchQuery.toLowerCase().trim();
+          var cat = this.selectedCategory;
+          return this.products.filter(function(p) {
+            var matchQ = !q || (p.nama && p.nama.toLowerCase().indexOf(q) !== -1) || (p.kode_produk && p.kode_produk.toLowerCase().indexOf(q) !== -1);
+            var matchCat = !cat || p.kategori === cat;
+            return matchQ && matchCat;
+          });
+        },
+
+        // --- MANAJEMEN PRODUK ---
+        openProductModal: function() {
+          this.productForm = {
+            id: '',
+            nama: '',
+            kode_produk: 'SHP-' + Math.floor(100 + Math.random() * 900),
+            kategori: '',
+            cover_url: '',
+            link_affiliate: '',
+            link_dashboard: ''
+          };
+          this.productModalOpen = true;
+        },
+
+        editProduct: function(prod) {
+          this.productForm = {
+            id: prod.id,
+            nama: prod.nama,
+            kode_produk: prod.kode_produk,
+            kategori: prod.kategori || '',
+            cover_url: prod.cover_url || '',
+            link_affiliate: prod.link_affiliate || '',
+            link_dashboard: prod.link_dashboard || ''
+          };
+          this.productModalOpen = true;
+        },
+
+        submitProductForm: function() {
+          var self = this;
+          this.isSavingProduct = true;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              self.isSavingProduct = false;
+              if (res && res.ok) {
+                self.productModalOpen = false;
+                self.showToast('Produk berhasil disimpan!');
+                self.loadInitialData();
+              } else {
+                self.showToast('Gagal menyimpan: ' + res.message);
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isSavingProduct = false;
+              self.showToast('Galat: ' + err.message);
+            })
+            .saveProduct(this.productForm);
+        },
+
+        confirmDeleteProduct: function(prod) {
+          var self = this;
+          this.confirmDialog = {
+            open: true,
+            title: 'Hapus Produk?',
+            message: 'Semua berkas media yang terkait dengan produk ' + prod.nama + ' (' + prod.kode_produk + ') juga akan dihapus permanen dari basis data.',
+            action: function() {
+              self.executeDeleteProduct(prod.id);
+            }
+          };
+        },
+
+        executeDeleteProduct: function(productId) {
+          var self = this;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.ok) {
+                self.showToast('Produk berhasil dihapus!');
+                self.loadInitialData();
+              } else {
+                self.showToast('Gagal menghapus: ' + res.message);
+              }
+            })
+            .deleteProduct(productId);
+        },
+
+        // --- MANAJEMEN MEDIA & BATCH ---
+        viewProductMedia: function(prod) {
+          this.selectedProduct = prod;
+          this.loadProductMedia(prod.id);
+        },
+
+        loadProductMedia: function(productId) {
+          var self = this;
+          this.isLoadingMedia = true;
+          this.productBatches = [];
+          google.script.run
+            .withSuccessHandler(function(res) {
+              self.isLoadingMedia = false;
+              if (res && res.ok) {
+                self.groupMediaByBatch(res.data || []);
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isLoadingMedia = false;
+              self.showToast('Gagal memuat media: ' + err.message);
+            })
+            .getMediaByProduct(productId);
+        },
+
+        groupMediaByBatch: function(rawItems) {
+          var map = {};
+          for (var i = 0; i < rawItems.length; i++) {
+            var item = rawItems[i];
+            var bId = item.batch_id || 'default_batch';
+            if (!map[bId]) {
+              map[bId] = {
+                batch_id: bId,
+                batch_nama: item.batch_nama || 'Batch Media',
+                content_type: item.content_type || 'ORI',
+                items: []
+              };
+            }
+            map[bId].items.push(item);
+          }
+          this.productBatches = Object.values(map);
+        },
+
+        openBatchUploadModal: function() {
+          if (!this.settings.cloudinary_cloud_name || !this.settings.cloudinary_preset) {
+            this.showToast('Lengkapi pengaturan Cloudinary sebelum mengunggah media.');
+            this.activeTab = 'pengaturan';
+            return;
+          }
+          this.batchForm = {
+            batchNama: 'Batch ' + new Date().toLocaleDateString('id-ID'),
+            contentType: 'ORI',
+            catatan: ''
+          };
+          this.selectedFiles = [];
+          var fileEl = document.getElementById('batchFileInput');
+          if (fileEl) fileEl.value = '';
+          this.batchModalOpen = true;
+        },
+
+        onFilesSelected: function(event) {
+          this.selectedFiles = Array.from(event.target.files);
+        },
+
+        submitBatchUpload: async function() {
+          if (this.selectedFiles.length === 0) return;
+          var self = this;
+          this.isUploadingMedia = true;
+          this.uploadProgressPercent = 0;
+          this.uploadStatusText = 'Menyiapkan berkas...';
+
+          var uploadedMediaList = [];
+          var batchId = 'batch_' + Date.now();
+          var cloudName = this.settings.cloudinary_cloud_name;
+          var uploadPreset = this.settings.cloudinary_preset;
+          var folderPath = 'dandaf/' + (this.selectedProduct ? this.selectedProduct.kode_produk : 'general');
+
+          for (var i = 0; i < this.selectedFiles.length; i++) {
+            var file = this.selectedFiles[i];
+            var mediaType = file.type.indexOf('video') !== -1 ? 'VIDEO' : 'FOTO';
+            self.uploadStatusText = 'Mengunggah (' + (i + 1) + '/' + self.selectedFiles.length + '): ' + file.name;
+
+            try {
+              var formData = new FormData();
+              formData.append('file', file);
+              formData.append('upload_preset', uploadPreset);
+              formData.append('folder', folderPath);
+
+              var uploadUrl = 'https://api.cloudinary.com/v1_1/' + cloudName + '/auto/upload';
+              var res = await fetch(uploadUrl, { method: 'POST', body: formData });
+              var resData = await res.json();
+
+              if (resData.secure_url) {
+                uploadedMediaList.push({
+                  produk_id: self.selectedProduct.id,
+                  batch_id: batchId,
+                  batch_nama: self.batchForm.batchNama,
+                  media_url: resData.secure_url,
+                  media_type: mediaType,
+                  content_type: self.batchForm.contentType,
+                  catatan: self.batchForm.catatan
+                });
+              }
+            } catch (err) {
+              console.error('Unggah gagal untuk:', file.name, err);
+            }
+
+            self.uploadProgressPercent = Math.round(((i + 1) / self.selectedFiles.length) * 100);
+          }
+
+          if (uploadedMediaList.length > 0) {
+            self.uploadStatusText = 'Menyimpan metadata batch...';
+            google.script.run
+              .withSuccessHandler(function(saveRes) {
+                self.isUploadingMedia = false;
+                self.batchModalOpen = false;
+                if (saveRes && saveRes.ok) {
+                  self.showToast('Sukses mengunggah ' + uploadedMediaList.length + ' aset media!');
+                  self.loadProductMedia(self.selectedProduct.id);
+                  self.loadInitialData(); // perbarui hitungan media produk
+                } else {
+                  self.showToast('Galat simpan metadata: ' + saveRes.message);
+                }
+              })
+              .withFailureHandler(function(err) {
+                self.isUploadingMedia = false;
+                self.showToast('Gagal simpan ke server: ' + err.message);
+              })
+              .saveMediaBatch(uploadedMediaList);
+          } else {
+            self.isUploadingMedia = false;
+            self.showToast('Semua unggahan gagal. Cek pengaturan Cloudinary Anda.');
+          }
+        },
+
+        copyBatchLinks: function(batch) {
+          var links = batch.items.map(function(item) { return item.media_url; }).join('\n');
+          this.copyText(links, batch.items.length + ' URL media berhasil disalin!');
+        },
+
+        confirmDeleteMedia: function(mediaId) {
+          var self = this;
+          this.confirmDialog = {
+            open: true,
+            title: 'Hapus Aset Media?',
+            message: 'Aset ini akan dihapus dari basis data manajer postingan.',
+            action: function() {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  if (res && res.ok) {
+                    self.showToast('Media dihapus!');
+                    self.loadProductMedia(self.selectedProduct.id);
+                  }
+                })
+                .deleteMedia(mediaId);
+            }
+          };
+        },
+
+        confirmDeleteBatch: function(batchId) {
+          var self = this;
+          this.confirmDialog = {
+            open: true,
+            title: 'Hapus Seluruh Batch?',
+            message: 'Semua media dalam batch ini akan dihapus dari daftar.',
+            action: function() {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  if (res && res.ok) {
+                    self.showToast('Batch media dihapus!');
+                    self.loadProductMedia(self.selectedProduct.id);
+                  }
+                })
+                .deleteBatch(batchId);
+            }
+          };
+        },
+
+        // --- PENGATURAN ---
+        saveSettings: function() {
+          var self = this;
+          this.isSavingSettings = true;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              self.isSavingSettings = false;
+              if (res && res.ok) {
+                self.showToast('Pengaturan berhasil disimpan!');
+              } else {
+                self.showToast('Gagal: ' + res.message);
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isSavingSettings = false;
+              self.showToast('Galat: ' + err.message);
+            })
+            .saveSettings(this.settings);
+        },
+
+        checkCloudinaryConfig: function() {
+          if (!this.settings.cloudinary_cloud_name || !this.settings.cloudinary_preset) {
+            this.showToast('Cloud Name dan Preset wajib diisi!');
+            return;
+          }
+          this.showToast('Konfigurasi Cloudinary tersimpan siap dipakai!');
+        },
+
+        // --- KOMPOSER POSTINGAN ---
+        onComposerProductChange: function() {
+          var self = this;
+          var p = this.products.find(function(x) { return x.id === self.composer.productId; });
+          if (p) {
+            this.generateTrackingCode();
+            this.composer.caption = 'Rekomendasi terbaik hari ini: ' + p.nama + '!\nKualitas premium dengan harga ramah kantong.\n\nCek promo di Shopee: ' + (p.link_affiliate || '') + '\n\n#ShopeeAffiliate #' + p.kode_produk;
+          }
+        },
+
+        generateTrackingCode: function() {
+          var prefix = this.settings.tracking_prefix || 'DANDAF';
+          var d = new Date(this.composer.date || new Date());
+          var yy = String(d.getFullYear()).slice(-2);
+          var mm = String(d.getMonth() + 1).padStart(2, '0');
+          var dd = String(d.getDate()).padStart(2, '0');
+          var dateStr = yy + mm + dd;
+          this.composer.trackingCode = prefix + '_' + dateStr + '_001';
+        },
+
+        get previewCaptionText() {
+          var cap = this.composer.caption || '';
+          if (this.composer.trackingCode) {
+            return cap + '\n\nTracking ID: ' + this.composer.trackingCode;
+          }
+          return cap;
+        },
+
+        // Modal Action
+        executeConfirmAction: function() {
+          if (this.confirmDialog.action) {
+            this.confirmDialog.action();
+          }
+          this.confirmDialog.open = false;
+        }
+      };
+    }
+  </script>
+</body>
+</html>
