@@ -463,7 +463,7 @@ function getPostsInternal() {
       kode_pelacakan: String(row[6] || ''),
       link_affiliate: String(row[7] || ''),
       caption: String(row[8] || ''),
-      status: String(row[9] || 'draf (belum ada link)'),
+      status: String(row[9] || 'draf'),
       url_postingan: String(row[10] || ''),
       created_at: row[11] instanceof Date ? row[11].toISOString() : String(row[11] || ''),
       updated_at: row[12] instanceof Date ? row[12].toISOString() : String(row[12] || '')
@@ -491,6 +491,62 @@ function getPostDetail(postId) {
     return { ok: false, success: false, message: 'Postingan tidak ditemukan.' };
   } catch (err) {
     return { ok: false, success: false, message: err.message };
+  }
+}
+
+// Mendapatkan nomor urut tracking code berikutnya tanpa menulis ke basis data
+function getNextTrackingCode(prefixInput, dateStr) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('postingan');
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName('postingan');
+    }
+
+    const settings = getSettingsInternal();
+    let prefix = String(prefixInput || settings.tracking_prefix || 'DD').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!prefix) prefix = 'DD';
+    if (prefix.length > 4) prefix = prefix.substring(0, 4);
+
+    let datePart = '';
+    if (dateStr) {
+      datePart = String(dateStr).replace(/[^0-9]/g, '').slice(2, 8);
+    }
+    if (datePart.length !== 6) {
+      const d = new Date();
+      const yy = String(d.getFullYear()).slice(-2);
+      const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+      const dd = ('0' + d.getDate()).slice(-2);
+      datePart = yy + mm + dd;
+    }
+
+    const tagBase = prefix + datePart;
+    const data = sheet.getDataRange().getValues();
+    let maxSeq = 0;
+    for (let j = 1; j < data.length; j++) {
+      const code = String(data[j][6] || '').trim();
+      if (code.indexOf(tagBase) === 0) {
+        const seqNum = parseInt(code.substring(tagBase.length), 10);
+        if (!isNaN(seqNum) && seqNum > maxSeq) {
+          maxSeq = seqNum;
+        }
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    const seqFormatted = nextSeq < 10 ? '0' + nextSeq : String(nextSeq);
+    const generatedTrackingCode = tagBase + seqFormatted;
+
+    return {
+      ok: true,
+      success: true,
+      data: {
+        code: generatedTrackingCode
+      }
+    };
+  } catch (err) {
+    return { ok: false, success: false, message: 'Gagal mengambil kode pelacakan: ' + err.message };
   }
 }
 
@@ -551,7 +607,6 @@ function savePost(payload) {
     const data = sheet.getDataRange().getValues();
     const isEdit = payload.id && String(payload.id).trim() !== '';
     const nowStr = new Date().toISOString();
-    const hasLink = payload.link_affiliate && String(payload.link_affiliate).trim() !== '';
     const mediaIdsJoined = selectedMediaIds.join(',');
 
     if (isEdit) {
@@ -566,15 +621,12 @@ function savePost(payload) {
       }
 
       if (rowIndex !== -1) {
-        const existingStatus = String(existingRow[9] || '');
-        let newStatus = existingStatus;
+        const existingStatus = String(existingRow[9] || 'draf');
         let finalCaption = payload.caption || '';
 
         // Kunci caption jika status sudah tayang
         if (existingStatus === 'sudah tayang') {
           finalCaption = String(existingRow[8] || '');
-        } else if (existingStatus.indexOf('draf') === 0) {
-          newStatus = hasLink ? 'draf (link tersimpan)' : 'draf (belum ada link)';
         }
 
         sheet.getRange(rowIndex, 2, 1, 9).setValues([[
@@ -586,7 +638,7 @@ function savePost(payload) {
           existingRow[6], // kode_pelacakan tidak boleh berubah
           payload.link_affiliate || '',
           finalCaption,
-          newStatus
+          existingStatus
         ]]);
         sheet.getRange(rowIndex, 13).setValue(nowStr);
 
@@ -594,47 +646,28 @@ function savePost(payload) {
           ok: true,
           success: true,
           message: 'Postingan berhasil diperbarui.',
-          data: { id: payload.id, kode_pelacakan: String(existingRow[6]), status: newStatus }
+          data: { id: payload.id, kode_pelacakan: String(existingRow[6]), status: existingStatus }
         };
       }
     }
 
-    // GENERASI KODE PELACAKAN OTOMATIS DI SERVER
-    const settings = getSettingsInternal();
-    let prefix = String(settings.tracking_prefix || 'DD').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!prefix) prefix = 'DD';
-    if (prefix.length > 4) prefix = prefix.substring(0, 4);
-
-    let datePart = '';
-    if (payload.tanggal_rencana) {
-      datePart = String(payload.tanggal_rencana).replace(/[^0-9]/g, '').slice(2, 8);
-    }
-    if (datePart.length !== 6) {
-      const d = new Date();
-      const yy = String(d.getFullYear()).slice(-2);
-      const mm = ('0' + (d.getMonth() + 1)).slice(-2);
-      const dd = ('0' + d.getDate()).slice(-2);
-      datePart = yy + mm + dd;
+    // Simpan Postingan Baru (cek keunikan kode_pelacakan)
+    const trackingCode = String(payload.kode_pelacakan || '').trim();
+    if (!trackingCode) {
+      return { ok: false, success: false, message: 'Kode pelacakan belum dibuat. Silakan klik Tambah Link Affiliate terlebih dahulu.' };
     }
 
-    const tagBase = prefix + datePart;
-    let maxSeq = 0;
     for (let j = 1; j < data.length; j++) {
-      const code = String(data[j][6] || '');
-      if (code.indexOf(tagBase) === 0) {
-        const seqNum = parseInt(code.substring(tagBase.length), 10);
-        if (!isNaN(seqNum) && seqNum > maxSeq) {
-          maxSeq = seqNum;
-        }
+      if (String(data[j][6]).trim() === trackingCode) {
+        return {
+          ok: false,
+          success: false,
+          message: 'Kode ' + trackingCode + ' sudah dipakai. Tutup form dan buka lagi untuk mendapat kode baru.'
+        };
       }
     }
-    const nextSeq = maxSeq + 1;
-    const seqFormatted = nextSeq < 10 ? '0' + nextSeq : String(nextSeq);
-    const generatedTrackingCode = tagBase + seqFormatted;
 
-    const initialStatus = hasLink ? 'draf (link tersimpan)' : 'draf (belum ada link)';
     const newId = 'post_' + Utilities.getUuid();
-
     sheet.appendRow([
       newId,
       payload.produk_id,
@@ -642,10 +675,10 @@ function savePost(payload) {
       payload.tipe,
       payload.tanggal_rencana || '',
       payload.jam_tayang || '',
-      generatedTrackingCode,
+      trackingCode,
       payload.link_affiliate || '',
       payload.caption || '',
-      initialStatus,
+      'draf',
       '', // url_postingan
       nowStr,
       nowStr
@@ -657,8 +690,8 @@ function savePost(payload) {
       message: 'Postingan berhasil dibuat.',
       data: {
         id: newId,
-        kode_pelacakan: generatedTrackingCode,
-        status: initialStatus
+        kode_pelacakan: trackingCode,
+        status: 'draf'
       }
     };
   } catch (err) {
@@ -728,8 +761,7 @@ function updatePostStatus(postId, newStatus, extraData) {
       sheet.getRange(rowIndex, 11).setValue(fbUrl);
       finalStatus = 'sudah tayang';
     } else if (newStatus === 'draf' || newStatus === 'tolak') {
-      const linkAff = String(postRow[7] || '').trim();
-      finalStatus = linkAff ? 'draf (link tersimpan)' : 'draf (belum ada link)';
+      finalStatus = 'draf';
     }
 
     sheet.getRange(rowIndex, 10).setValue(finalStatus);

@@ -344,7 +344,7 @@
           <label class="text-xs font-semibold text-slate-600">Filter Status:</label>
           <select x-model="postFilterStatus" class="px-2.5 py-1.5 border border-slate-200 rounded text-xs bg-white">
             <option value="">Semua Status</option>
-            <option value="draf">Draf (Semua)</option>
+            <option value="draf">Draf</option>
             <option value="menunggu persetujuan">Menunggu Persetujuan</option>
             <option value="disetujui">Disetujui</option>
             <option value="terjadwal">Terjadwal</option>
@@ -392,21 +392,24 @@
                   <div class="text-[10px] text-slate-400" x-text="p.jam_tayang ? 'Jam ' + p.jam_tayang : 'Belum ada jam'"></div>
                 </td>
                 <td class="p-3">
-                  <span :class="{
-                    'bg-slate-100 text-slate-700': p.status.indexOf('draf') === 0,
-                    'bg-amber-100 text-amber-800': p.status === 'menunggu persetujuan',
-                    'bg-sky-100 text-sky-800': p.status === 'disetujui',
-                    'bg-indigo-100 text-indigo-800': p.status === 'terjadwal',
-                    'bg-emerald-100 text-emerald-800': p.status === 'sudah tayang',
-                    'bg-rose-100 text-rose-800': p.status === 'diarsipkan'
-                  }" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="p.status"></span>
+                  <div class="flex flex-col items-start gap-1">
+                    <span :class="{
+                      'bg-slate-100 text-slate-700': p.status === 'draf',
+                      'bg-amber-100 text-amber-800': p.status === 'menunggu persetujuan',
+                      'bg-sky-100 text-sky-800': p.status === 'disetujui',
+                      'bg-indigo-100 text-indigo-800': p.status === 'terjadwal',
+                      'bg-emerald-100 text-emerald-800': p.status === 'sudah tayang',
+                      'bg-rose-100 text-rose-800': p.status === 'diarsipkan'
+                    }" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="p.status"></span>
+                    <span x-show="p.status === 'draf'" :class="p.link_affiliate ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-500 bg-slate-50 border-slate-200'" class="text-[10px] px-1.5 py-0.5 rounded border font-medium" x-text="p.link_affiliate ? 'Ada link' : 'Belum ada link'"></span>
+                  </div>
                 </td>
                 <td class="p-3 text-right">
                   <div class="inline-flex items-center space-x-1">
                     <button @click="editPost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Ubah Postingan">
                       <span class="material-symbols-outlined text-base">edit</span>
                     </button>
-                    <button x-show="p.status.indexOf('draf') === 0" @click="ajukanPost(p)" class="p-1.5 hover:bg-blue-50 rounded text-blue-900" title="Ajukan Persetujuan">
+                    <button x-show="p.status === 'draf'" @click="ajukanPost(p)" class="p-1.5 hover:bg-blue-50 rounded text-blue-900" title="Ajukan Persetujuan">
                       <span class="material-symbols-outlined text-base">send</span>
                     </button>
                     <button x-show="p.status !== 'diarsipkan'" @click="confirmArchivePost(p)" class="p-1.5 hover:bg-rose-50 rounded text-rose-600" title="Arsipkan">
@@ -712,9 +715,9 @@
   <!-- MODAL: FORM POSTINGAN (TAMBAH / EDIT)          -->
   <!-- ============================================== -->
   <div x-show="postModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-2xl w-full border border-slate-200 p-6 shadow-xl relative max-h-[90vh] overflow-y-auto" @click.away="!isSavingPost && (postModalOpen = false)">
+    <div class="bg-white rounded-lg max-w-2xl w-full border border-slate-200 p-6 shadow-xl relative max-h-[90vh] overflow-y-auto" @click.away="!isSavingPost && cancelPostForm()">
       <h3 class="text-lg font-bold text-slate-900 mb-1" x-text="postForm.id ? 'Ubah Postingan' : 'Buat Postingan Baru'"></h3>
-      <p class="text-xs text-slate-500 mb-4">Tentukan produk, tipe media, tautan affiliate Shopee, serta jadwal rencana tayang.</p>
+      <p class="text-xs text-slate-500 mb-4">Tentukan produk, tipe media, jadwal tayang, dan tautan affiliate Shopee.</p>
 
       <form @submit.prevent="submitPostForm()" class="space-y-4">
         <!-- Produk -->
@@ -789,27 +792,47 @@
           </div>
         </div>
 
-        <!-- Link Affiliate -->
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">Link Affiliate Shopee</label>
-            <button type="button" @click="insertAffiliateLink()" class="text-[11px] text-blue-900 font-semibold hover:underline flex items-center space-x-0.5">
-              <span class="material-symbols-outlined text-xs">add_link</span>
-              <span>Sisipkan Link ke Caption</span>
+        <!-- Manajemen Link Affiliate -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700">Tautan Affiliate Shopee</span>
+              <div class="text-[11px] text-slate-500">
+                <template x-if="postForm.link_affiliate">
+                  <span class="text-emerald-700 font-mono truncate block max-w-sm" x-text="postForm.link_affiliate"></span>
+                </template>
+                <template x-if="!postForm.link_affiliate">
+                  <span class="text-slate-400">Belum ada link affiliate yang tersimpan di draf ini.</span>
+                </template>
+              </div>
+            </div>
+            <button type="button" :disabled="!postForm.produk_id || !postForm.tanggal_rencana || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link Affiliate' : 'Tambah Link Affiliate'"></span>
             </button>
           </div>
-          <input type="url" x-model="postForm.link_affiliate" placeholder="https://shope.ee/..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+          <div x-show="postForm.kode_pelacakan" class="text-[11px] text-slate-600 flex items-center space-x-1">
+            <span>Kode pelacakan draf:</span>
+            <span class="font-mono font-bold text-blue-900" x-text="postForm.kode_pelacakan"></span>
+          </div>
         </div>
 
         <!-- Caption -->
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Caption Postingan</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold text-slate-700">Caption Postingan</label>
+            <button type="button" :disabled="!postForm.link_affiliate" @click="insertAffiliateLink()" class="text-[11px] text-blue-900 disabled:text-slate-400 font-semibold hover:underline flex items-center space-x-0.5">
+              <span class="material-symbols-outlined text-xs">add_link</span>
+              <span>Sisipkan Link ke Caption</span>
+            </button>
+          </div>
           <textarea id="postCaptionInput" x-model="postForm.caption" :disabled="postForm.status === 'sudah tayang'" rows="4" placeholder="Tulis caption di sini..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-500"></textarea>
           <span x-show="postForm.status === 'sudah tayang'" class="text-[11px] text-amber-700 font-medium">Caption dikunci karena konten sudah tayang di Facebook.</span>
         </div>
 
         <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
-          <button type="button" @click="postModalOpen = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg">Batal</button>
+          <button type="button" @click="cancelPostForm()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg">Batal</button>
           <button type="submit" :disabled="isSavingPost" class="px-4 py-2 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center space-x-1">
             <span x-show="isSavingPost" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
             <span>Simpan Postingan</span>
@@ -820,26 +843,34 @@
   </div>
 
   <!-- ============================================== -->
-  <!-- MODAL: KODE PELACAKAN SHOPEE (POST-SAVE)       -->
+  <!-- MODAL: TAMBAH LINK AFFILIATE (STATE BROWSER)   -->
   <!-- ============================================== -->
-  <div x-show="tagNoticeModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative" @click.away="tagNoticeModalOpen = false">
+  <div x-show="affiliateLinkModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative" @click.away="affiliateLinkModalOpen = false">
       <div class="flex items-center space-x-2 text-blue-900 mb-2">
         <span class="material-symbols-outlined text-2xl">sell</span>
-        <h3 class="text-base font-bold text-slate-900">Kode Pelacakan Dibuat</h3>
+        <h3 class="text-base font-bold text-slate-900">Link Affiliate & Pelacakan</h3>
       </div>
-      <p class="text-xs text-slate-600 mb-4">Salin tag ini ke dashboard Shopee sebagai <strong>Tag_link1</strong> saat membuat link affiliate:</p>
+      <p class="text-xs text-slate-600 mb-3">Salin tag ini ke dashboard Shopee sebagai <strong>Tag_link1</strong> saat membuat tautan:</p>
       
       <div class="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg border border-slate-200 mb-4">
-        <span class="font-mono font-bold text-blue-950 text-base flex-1" x-text="savedTrackingCode"></span>
-        <button @click="copyText(savedTrackingCode, 'Kode pelacakan tersalin!')" class="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold rounded flex items-center space-x-1">
+        <span class="font-mono font-bold text-blue-950 text-base flex-1" x-text="postForm.kode_pelacakan"></span>
+        <button type="button" @click="copyText(postForm.kode_pelacakan, 'Kode pelacakan tersalin!')" class="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold rounded flex items-center space-x-1">
           <span class="material-symbols-outlined text-sm">content_copy</span>
           <span>Salin</span>
         </button>
       </div>
 
-      <div class="flex justify-end">
-        <button @click="tagNoticeModalOpen = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg">Tutup</button>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Link Affiliate dari Dashboard Shopee</label>
+          <input type="url" x-model="tempAffiliateLink" placeholder="https://shope.ee/..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+      </div>
+
+      <div class="pt-4 mt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+        <button type="button" @click="affiliateLinkModalOpen = false" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded">Batal</button>
+        <button type="button" @click="saveAffiliateLinkFromModal()" class="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold rounded">Simpan Link</button>
       </div>
     </div>
   </div>
@@ -955,22 +986,25 @@
         posts: [],
         postFilterStatus: '',
         postModalOpen: false,
+        affiliateLinkModalOpen: false,
         isSavingPost: false,
         isLoadingPostMedia: false,
+        isLoadingTrackingCode: false,
         postMediaOptions: [],
+        tempAffiliateLink: '',
+        initialPostFormJson: '',
         postForm: {
           id: '',
           produk_id: '',
           tipe: 'TEKS',
           media_ids: [],
-          tanggal_rencana: new Date().toISOString().substring(0, 10),
+          tanggal_rencana: '',
           jam_tayang: '',
+          kode_pelacakan: '',
           link_affiliate: '',
           caption: '',
           status: ''
         },
-        savedTrackingCode: '',
-        tagNoticeModalOpen: false,
         tayangModalOpen: false,
         isSavingTayang: false,
         tayangPostId: '',
@@ -1335,9 +1369,6 @@
           var self = this;
           if (!this.postFilterStatus) return this.posts;
           return this.posts.filter(function(p) {
-            if (self.postFilterStatus === 'draf') {
-              return p.status && p.status.indexOf('draf') === 0;
-            }
             return p.status === self.postFilterStatus;
           });
         },
@@ -1370,10 +1401,12 @@
             media_ids: [],
             tanggal_rencana: new Date().toISOString().substring(0, 10),
             jam_tayang: '10:00',
+            kode_pelacakan: '',
             link_affiliate: '',
             caption: '',
-            status: ''
+            status: 'draf'
           };
+          this.initialPostFormJson = JSON.stringify(this.postForm);
           this.postModalOpen = true;
           if (this.postForm.produk_id) {
             this.loadProductMediaForPost(this.postForm.produk_id);
@@ -1388,12 +1421,67 @@
             media_ids: Array.isArray(post.media_ids) ? post.media_ids.slice() : [],
             tanggal_rencana: post.tanggal_rencana || '',
             jam_tayang: post.jam_tayang || '',
+            kode_pelacakan: post.kode_pelacakan || '',
             link_affiliate: post.link_affiliate || '',
             caption: post.caption || '',
-            status: post.status || ''
+            status: post.status || 'draf'
           };
+          this.initialPostFormJson = JSON.stringify(this.postForm);
           this.postModalOpen = true;
           this.loadProductMediaForPost(post.produk_id);
+        },
+
+        cancelPostForm: function() {
+          var isDirty = JSON.stringify(this.postForm) !== this.initialPostFormJson;
+          if (isDirty) {
+            var self = this;
+            this.confirmDialog = {
+              open: true,
+              title: 'Batalkan Perubahan?',
+              message: 'Perubahan belum disimpan akan hilang.',
+              action: function() {
+                self.postModalOpen = false;
+              }
+            };
+          } else {
+            this.postModalOpen = false;
+          }
+        },
+
+        openAffiliateLinkModal: function() {
+          var self = this;
+          if (!this.postForm.produk_id || !this.postForm.tanggal_rencana) {
+            this.showToast('Pilih produk dan tanggal rencana terlebih dahulu.');
+            return;
+          }
+          this.tempAffiliateLink = this.postForm.link_affiliate || '';
+
+          if (!this.postForm.kode_pelacakan) {
+            this.isLoadingTrackingCode = true;
+            google.script.run
+              .withSuccessHandler(function(res) {
+                self.isLoadingTrackingCode = false;
+                if (res && res.ok && res.data && res.data.code) {
+                  self.postForm.kode_pelacakan = res.data.code;
+                  self.affiliateLinkModalOpen = true;
+                } else {
+                  self.showToast('Gagal membuat kode: ' + (res.message || 'Terjadi kesalahan'));
+                }
+              })
+              .withFailureHandler(function(err) {
+                self.isLoadingTrackingCode = false;
+                self.showToast('Galat server: ' + err.message);
+              })
+              .getNextTrackingCode(this.settings.tracking_prefix, this.postForm.tanggal_rencana);
+          } else {
+            this.affiliateLinkModalOpen = true;
+          }
+        },
+
+        saveAffiliateLinkFromModal: function() {
+          this.postForm.link_affiliate = this.tempAffiliateLink ? this.tempAffiliateLink.trim() : '';
+          this.affiliateLinkModalOpen = false;
+          this.showToast('Link affiliate disimpan di form.');
         },
 
         onPostProductChange: function() {
@@ -1439,10 +1527,7 @@
 
         insertAffiliateLink: function() {
           var link = this.postForm.link_affiliate;
-          if (!link || !link.trim()) {
-            this.showToast('Isi tautan link affiliate terlebih dahulu.');
-            return;
-          }
+          if (!link || !link.trim()) return;
           var textarea = document.getElementById('postCaptionInput');
           if (!textarea) return;
           var start = textarea.selectionStart;
@@ -1464,10 +1549,6 @@
               if (res && res.ok) {
                 self.postModalOpen = false;
                 self.showToast(res.message);
-                if (res.data && res.data.kode_pelacakan && !self.postForm.id) {
-                  self.savedTrackingCode = res.data.kode_pelacakan;
-                  self.tagNoticeModalOpen = true;
-                }
                 self.refreshPosts();
               } else {
                 self.showToast('Gagal: ' + res.message);
