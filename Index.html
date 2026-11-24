@@ -291,15 +291,18 @@
                   <div class="border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between group bg-slate-50">
                     <div class="aspect-square relative flex items-center justify-center bg-black/5 overflow-hidden">
                       <template x-if="item.media_type === 'FOTO'">
-                        <img :src="item.media_url" class="w-full h-full object-cover">
+                        <img :src="item.media_url" loading="lazy" class="w-full h-full object-cover">
                       </template>
                       <template x-if="item.media_type === 'VIDEO'">
-                        <div class="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-white relative">
-                          <span class="material-symbols-outlined text-4xl">play_circle</span>
-                          <span class="text-[10px] text-slate-300 mt-1">Video</span>
+                        <div x-data="{ videoError: false }" class="w-full h-full flex items-center justify-center bg-black">
+                          <video x-show="!videoError" :src="item.media_url" preload="metadata" muted controls @error="videoError = true" class="w-full h-full object-cover"></video>
+                          <div x-show="videoError" class="flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                            <span class="material-symbols-outlined text-3xl">videocam_off</span>
+                            <span class="text-[9px] mt-1">Video gagal diputar</span>
+                          </div>
                         </div>
                       </template>
-                      <span class="absolute top-1 left-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/70 text-white" x-text="item.media_type"></span>
+                      <span class="absolute top-1 left-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/70 text-white pointer-events-none" x-text="item.media_type"></span>
                     </div>
 
                     <!-- Tombol Aksi Item -->
@@ -484,9 +487,6 @@
           <h1 class="text-2xl font-bold text-slate-900">Jadwal Tayang</h1>
           <p class="text-sm text-slate-500">Antrean konten yang berstatus terjadwal, terurut berdasarkan waktu rencana.</p>
         </div>
-        <div class="text-xs font-semibold px-3 py-1.5 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg">
-          Batas Kuota: <span x-text="settings.daily_post_limit || 3"></span> Post / Hari
-        </div>
       </div>
 
       <div class="space-y-4">
@@ -526,29 +526,59 @@
     <!-- TAB 5: AKUN                                    -->
     <!-- ============================================== -->
     <div x-show="activeTab === 'akun'">
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold text-slate-900">Profil & Akun</h1>
-        <p class="text-sm text-slate-500">Kelola profil kerja dan parameter default akun.</p>
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-900">Daftar Akun Publisher</h1>
+          <p class="text-sm text-slate-500">Kelola akun, prefix pelacakan unik, dan kuota posting harian.</p>
+        </div>
+        <button @click="openAccountModal()" class="inline-flex items-center justify-center space-x-2 bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm">
+          <span class="material-symbols-outlined">add</span>
+          <span>Tambah Akun</span>
+        </button>
       </div>
-      <div class="bg-white border border-slate-200 rounded-lg p-6 max-w-lg space-y-4">
-        <div class="flex items-center space-x-4">
-          <div class="w-12 h-12 rounded-full bg-blue-900 text-white flex items-center justify-center font-bold text-lg" x-text="settings.tracking_prefix || 'DD'"></div>
-          <div>
-            <div class="font-bold text-slate-900">DanDaf Single Operator</div>
-            <div class="text-xs text-slate-500">Workspace Mandiri Facebook Publisher</div>
-          </div>
-        </div>
-        <div class="pt-3 border-t border-slate-100 text-xs text-slate-600 space-y-2">
-          <div class="flex justify-between">
-            <span class="text-slate-400">Prefix Tracking Aktif:</span>
-            <span class="font-mono font-bold text-blue-900" x-text="settings.tracking_prefix || 'DD'"></span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-slate-400">Batas Kuota Post Harian:</span>
-            <span class="font-bold text-slate-800" x-text="(settings.daily_post_limit || 3) + ' Postingan'"></span>
-          </div>
-        </div>
-        <p class="text-xs text-slate-500">Untuk memodifikasi prefix tracking atau kuota harian, buka menu Pengaturan.</p>
+
+      <!-- Tabel Akun -->
+      <div class="bg-white border border-slate-200 rounded-lg overflow-x-auto shadow-sm">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+              <th class="p-3">Nama Akun</th>
+              <th class="p-3">Platform</th>
+              <th class="p-3">Prefix Tracking</th>
+              <th class="p-3">Batas Post / Hari</th>
+              <th class="p-3">Status</th>
+              <th class="p-3 text-right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <template x-for="acc in accounts" :key="acc.id">
+              <tr class="hover:bg-slate-50/80 transition-colors">
+                <td class="p-3 font-semibold text-slate-900" x-text="acc.nama_akun"></td>
+                <td class="p-3 text-slate-600" x-text="acc.platform"></td>
+                <td class="p-3 font-mono font-bold text-blue-900" x-text="acc.prefix"></td>
+                <td class="p-3 text-slate-700" x-text="acc.batas_harian + ' postingan'"></td>
+                <td class="p-3">
+                  <span :class="acc.aktif ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="acc.aktif ? 'Aktif' : 'Nonaktif'"></span>
+                </td>
+                <td class="p-3 text-right">
+                  <div class="inline-flex items-center space-x-1">
+                    <button @click="editAccount(acc)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Ubah Akun">
+                      <span class="material-symbols-outlined text-base">edit</span>
+                    </button>
+                    <button @click="toggleAccount(acc)" :class="acc.aktif ? 'hover:bg-amber-50 text-amber-700' : 'hover:bg-emerald-50 text-emerald-700'" class="p-1.5 rounded" :title="acc.aktif ? 'Nonaktifkan Akun' : 'Aktifkan Akun'">
+                      <span class="material-symbols-outlined text-base" x-text="acc.aktif ? 'pause_circle' : 'play_circle'"></span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="accounts.length === 0">
+              <td colspan="6" class="p-8 text-center text-slate-400">
+                Belum ada akun. Klik "Tambah Akun" untuk membuat akun pertama.
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -577,21 +607,18 @@
             </div>
 
             <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Cloudinary API Key (Opsional)</label>
-              <input type="text" x-model="settings.cloudinary_api_key" placeholder="Contoh: 123456789012345" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <label class="block text-xs font-bold text-slate-700 mb-1">Cloudinary API Key *</label>
+              <input type="text" x-model="settings.cloudinary_api_key" required placeholder="Contoh: 123456789012345" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <span class="text-[11px] text-slate-400">Dibutuhkan untuk otorisasi penghapusan file di Cloudinary.</span>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Prefix Tracking (Maks 4 Karakter) *</label>
-                <input type="text" x-model="settings.tracking_prefix" maxlength="4" required placeholder="DD" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono uppercase bg-white">
-                <span class="text-[11px] text-slate-400">Contoh: DD atau DAND (Huruf & Angka)</span>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-slate-700">Cloudinary API Secret *</label>
+                <span x-show="settings.has_api_secret" class="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded">Tersimpan</span>
               </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Batas Postingan per Hari *</label>
-                <input type="number" min="1" max="20" x-model.number="settings.daily_post_limit" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-                <span class="text-[11px] text-slate-400">Standar aman: 3 kuota per hari</span>
-              </div>
+              <input type="password" x-model="settings.cloudinary_api_secret" :placeholder="settings.has_api_secret ? 'Tersimpan (kosongkan jika tidak ingin mengubah)' : 'Masukkan API Secret'" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+              <span class="text-[11px] text-slate-400">Disimpan aman di Script Properties server, tidak terekspos ke spreadsheet maupun browser.</span>
             </div>
 
             <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -614,8 +641,13 @@
   <!-- MODAL 1: FORM PRODUK (TAMBAH / EDIT)           -->
   <!-- ============================================== -->
   <div x-show="productModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative" @click.away="productModalOpen = false">
-      <h3 class="text-lg font-bold text-slate-900 mb-4" x-text="productForm.id ? 'Ubah Data Produk' : 'Tambah Produk Baru'"></h3>
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900" x-text="productForm.id ? 'Ubah Data Produk' : 'Tambah Produk Baru'"></h3>
+        <button type="button" @click="productModalOpen = false" class="text-slate-400 hover:text-slate-600">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
       
       <form @submit.prevent="submitProductForm()" class="space-y-4">
         <div>
@@ -658,8 +690,13 @@
   <!-- MODAL 2: UPLOAD BATCH MEDIA KE CLOUDINARY     -->
   <!-- ============================================== -->
   <div x-show="batchModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-lg w-full border border-slate-200 p-6 shadow-xl relative" @click.away="!isUploadingMedia && (batchModalOpen = false)">
-      <h3 class="text-lg font-bold text-slate-900 mb-1">Upload Batch Media Langsung</h3>
+    <div class="bg-white rounded-lg max-w-lg w-full border border-slate-200 p-6 shadow-xl relative">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-lg font-bold text-slate-900">Upload Batch Media Langsung</h3>
+        <button type="button" :disabled="isUploadingMedia" @click="batchModalOpen = false" class="text-slate-400 hover:text-slate-600 disabled:opacity-30">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
       <p class="text-xs text-slate-500 mb-4">Berkas diunggah langsung dari peramban ke Cloudinary.</p>
 
       <form @submit.prevent="submitBatchUpload()" class="space-y-4">
@@ -715,42 +752,81 @@
   <!-- MODAL: FORM POSTINGAN (TAMBAH / EDIT)          -->
   <!-- ============================================== -->
   <div x-show="postModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-2xl w-full border border-slate-200 p-6 shadow-xl relative max-h-[90vh] overflow-y-auto" @click.away="!isSavingPost && cancelPostForm()">
-      <h3 class="text-lg font-bold text-slate-900 mb-1" x-text="postForm.id ? 'Ubah Postingan' : 'Buat Postingan Baru'"></h3>
-      <p class="text-xs text-slate-500 mb-4">Tentukan produk, tipe media, jadwal tayang, dan tautan affiliate Shopee.</p>
+    <div class="bg-white rounded-lg max-w-2xl w-full border border-slate-200 p-6 shadow-xl relative max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-lg font-bold text-slate-900" x-text="postForm.id ? 'Ubah Postingan' : 'Buat Postingan Baru'"></h3>
+        <button type="button" @click="cancelPostForm()" class="text-slate-400 hover:text-slate-600">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">Tentukan akun, produk, tipe media, jadwal tayang, dan tautan affiliate Shopee.</p>
 
       <form @submit.prevent="submitPostForm()" class="space-y-4">
-        <!-- Produk -->
+        <!-- Akun Publisher -->
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Produk *</label>
-          <select x-model="postForm.produk_id" @change="onPostProductChange()" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-            <option value="">-- Pilih Produk --</option>
-            <template x-for="p in products" :key="p.id">
-              <option :value="p.id" x-text="p.kode_produk + ' - ' + p.nama"></option>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Akun *</label>
+          <select x-model="postForm.akun_id" @change="onPostAccountChange()" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+            <template x-for="acc in selectableAccounts" :key="acc.id">
+              <option :value="acc.id" x-text="acc.nama_akun + ' (' + acc.platform + ' - Prefix: ' + acc.prefix + ')'"></option>
             </template>
           </select>
+        </div>
+
+        <!-- Kolom Pencarian Produk (Combobox dengan Arrow Nav) -->
+        <div class="relative">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Produk *</label>
+          <div class="relative">
+            <input type="text" x-model="productSearchInput" @focus="productDropdownOpen = true" @input="productDropdownOpen = true; highlightedProductIndex = 0" @keydown.arrow-down.prevent="navigateProductList(1)" @keydown.arrow-up.prevent="navigateProductList(-1)" @keydown.enter.prevent="selectHighlightedProduct()" placeholder="Ketik nama atau kode produk..." class="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+            <span class="material-symbols-outlined absolute left-2.5 top-2.5 text-slate-400 text-sm">search</span>
+            <button type="button" x-show="postForm.produk_id" @click="clearSelectedProduct()" class="absolute right-2 top-2 text-slate-400 hover:text-slate-600">
+              <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
+
+          <!-- Dropdown Hasil Pencarian Produk -->
+          <div x-show="productDropdownOpen" class="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto divide-y divide-slate-100">
+            <template x-for="(p, index) in filteredSearchProducts" :key="p.id">
+              <div @click="selectProductItem(p)" @mouseenter="highlightedProductIndex = index" :class="index === highlightedProductIndex ? 'bg-blue-50 text-blue-900' : 'text-slate-700'" class="p-2 flex items-center space-x-3 cursor-pointer hover:bg-blue-50 transition">
+                <div class="w-9 h-9 rounded bg-slate-100 shrink-0 overflow-hidden flex items-center justify-center border border-slate-200">
+                  <template x-if="p.cover_url">
+                    <img :src="p.cover_url" class="w-full h-full object-cover">
+                  </template>
+                  <template x-if="!p.cover_url">
+                    <span class="material-symbols-outlined text-slate-400 text-base">inventory_2</span>
+                  </template>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-xs truncate" x-text="p.nama"></div>
+                  <div class="text-[10px] text-slate-400 font-mono" x-text="p.kode_produk"></div>
+                </div>
+              </div>
+            </template>
+            <div x-show="filteredSearchProducts.length === 0" class="p-3 text-center text-xs text-slate-400">
+              Produk tidak ditemukan.
+            </div>
+          </div>
         </div>
 
         <!-- Tipe Postingan -->
         <div class="grid grid-cols-3 gap-3">
           <label class="border border-slate-200 p-3 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'TEKS' ? 'border-blue-900 bg-blue-50/40' : ''">
-            <input type="radio" value="TEKS" x-model="postForm.tipe" class="text-blue-900">
+            <input type="radio" value="TEKS" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
             <span class="text-xs font-semibold">Teks Saja</span>
           </label>
           <label class="border border-slate-200 p-3 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'FOTO' ? 'border-blue-900 bg-blue-50/40' : ''">
-            <input type="radio" value="FOTO" x-model="postForm.tipe" class="text-blue-900">
+            <input type="radio" value="FOTO" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
             <span class="text-xs font-semibold">Album Foto (1-10)</span>
           </label>
           <label class="border border-slate-200 p-3 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'VIDEO' ? 'border-blue-900 bg-blue-50/40' : ''">
-            <input type="radio" value="VIDEO" x-model="postForm.tipe" class="text-blue-900">
+            <input type="radio" value="VIDEO" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
             <span class="text-xs font-semibold">Satu Video Tunggal</span>
           </label>
         </div>
 
-        <!-- Pilih Media Produk -->
+        <!-- Pilih Media Produk (Hanya Tipe yang Sesuai) -->
         <div x-show="postForm.tipe !== 'TEKS'">
           <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">Pilih Berkas Media dari Produk Ini</label>
+            <label class="block text-xs font-bold text-slate-700" x-text="postForm.tipe === 'VIDEO' ? 'Pilih Satu Video' : 'Pilih Foto (Maks 10)'"></label>
             <span class="text-xs text-slate-500 font-semibold" x-text="selectedMediaCountText"></span>
           </div>
           
@@ -758,23 +834,29 @@
             Memuat daftar media produk...
           </div>
 
-          <div x-show="!isLoadingPostMedia && postMediaOptions.length === 0" class="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
-            Produk ini belum memiliki aset media. Buka detail produk untuk mengunggah berkas.
+          <div x-show="!isLoadingPostMedia && filteredPostMedia.length === 0" class="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
+            Tidak ada media <span x-text="postForm.tipe"></span> pada produk ini. Buka katalog produk untuk mengunggah berkas terkait.
           </div>
 
-          <div x-show="!isLoadingPostMedia && postMediaOptions.length > 0" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2 border border-slate-200 rounded-lg bg-slate-50">
-            <template x-for="med in postMediaOptions" :key="med.id">
-              <label class="relative border rounded p-1.5 cursor-pointer flex flex-col items-center bg-white hover:border-blue-900" :class="postForm.media_ids.indexOf(med.id) !== -1 ? 'ring-2 ring-blue-900' : ''">
+          <div x-show="!isLoadingPostMedia && filteredPostMedia.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-56 overflow-y-auto p-2 border border-slate-200 rounded-lg bg-slate-50">
+            <template x-for="med in filteredPostMedia" :key="med.id">
+              <label class="relative border rounded p-1.5 cursor-pointer flex flex-col items-center bg-white hover:border-blue-900 transition" :class="postForm.media_ids.indexOf(med.id) !== -1 ? 'ring-2 ring-blue-900' : ''">
                 <input type="checkbox" :value="med.id" @change="togglePostMedia(med.id)" :checked="postForm.media_ids.indexOf(med.id) !== -1" class="absolute top-1 left-1 z-10">
                 <div class="w-full aspect-square bg-slate-100 rounded overflow-hidden flex items-center justify-center mb-1">
-                  <template x-if="med.media_type === 'FOTO'">
-                    <img :src="med.media_url" class="w-full h-full object-cover">
+                  <template x-if="getMediaFileType(med) === 'FOTO'">
+                    <img :src="med.media_url" loading="lazy" class="w-full h-full object-cover">
                   </template>
-                  <template x-if="med.media_type === 'VIDEO'">
-                    <span class="material-symbols-outlined text-slate-700">play_circle</span>
+                  <template x-if="getMediaFileType(med) === 'VIDEO'">
+                    <div x-data="{ videoError: false }" class="w-full h-full flex items-center justify-center bg-black">
+                      <video x-show="!videoError" :src="med.media_url" preload="metadata" muted controls @error="videoError = true" class="w-full h-full object-cover"></video>
+                      <div x-show="videoError" class="flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                        <span class="material-symbols-outlined text-2xl">videocam_off</span>
+                        <span class="text-[9px]">Gagal muat</span>
+                      </div>
+                    </div>
                   </template>
                 </div>
-                <span class="text-[10px] font-bold" :class="med.media_type === 'VIDEO' ? 'text-indigo-600' : 'text-slate-600'" x-text="med.media_type"></span>
+                <span class="text-[10px] font-bold" :class="getMediaFileType(med) === 'VIDEO' ? 'text-indigo-600' : 'text-slate-600'" x-text="getMediaFileType(med)"></span>
               </label>
             </template>
           </div>
@@ -818,15 +900,67 @@
           </div>
         </div>
 
-        <!-- Caption -->
-        <div>
+        <!-- Caption & Emoji Panel -->
+        <div class="relative">
           <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">Caption Postingan</label>
+            <div class="flex items-center space-x-2">
+              <label class="block text-xs font-bold text-slate-700">Caption Postingan</label>
+              <!-- Tombol Pembuka Panel Emoji -->
+              <button type="button" @click="emojiPickerOpen = !emojiPickerOpen" class="text-xs text-slate-600 hover:text-blue-900 font-semibold flex items-center space-x-0.5">
+                <span class="material-symbols-outlined text-sm">mood</span>
+                <span>Emoji</span>
+              </button>
+            </div>
             <button type="button" :disabled="!postForm.link_affiliate" @click="insertAffiliateLink()" class="text-[11px] text-blue-900 disabled:text-slate-400 font-semibold hover:underline flex items-center space-x-0.5">
               <span class="material-symbols-outlined text-xs">add_link</span>
               <span>Sisipkan Link ke Caption</span>
             </button>
           </div>
+
+          <!-- Panel Pilihan 48+ Emoji Ringan -->
+          <div x-show="emojiPickerOpen" class="absolute left-0 bottom-full mb-1 z-30 bg-white border border-slate-200 rounded-lg shadow-xl p-3 w-72 space-y-2">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-1">
+              <span class="text-[11px] font-bold text-slate-700">Pilih Emoji</span>
+              <button type="button" @click="emojiPickerOpen = false" class="text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+            <div class="max-h-44 overflow-y-auto space-y-2 text-sm pr-1">
+              <div>
+                <span class="text-[10px] font-semibold text-slate-400 block mb-0.5">Wajah & Emosi</span>
+                <div class="grid grid-cols-8 gap-1">
+                  <template x-for="em in emojiCategories.wajah" :key="em">
+                    <button type="button" @click="insertEmoji(em)" class="hover:bg-slate-100 rounded p-1 text-center" x-text="em"></button>
+                  </template>
+                </div>
+              </div>
+              <div>
+                <span class="text-[10px] font-semibold text-slate-400 block mb-0.5">Tangan & Gestur</span>
+                <div class="grid grid-cols-8 gap-1">
+                  <template x-for="em in emojiCategories.tangan" :key="em">
+                    <button type="button" @click="insertEmoji(em)" class="hover:bg-slate-100 rounded p-1 text-center" x-text="em"></button>
+                  </template>
+                </div>
+              </div>
+              <div>
+                <span class="text-[10px] font-semibold text-slate-400 block mb-0.5">Objek & Belanja</span>
+                <div class="grid grid-cols-8 gap-1">
+                  <template x-for="em in emojiCategories.objek" :key="em">
+                    <button type="button" @click="insertEmoji(em)" class="hover:bg-slate-100 rounded p-1 text-center" x-text="em"></button>
+                  </template>
+                </div>
+              </div>
+              <div>
+                <span class="text-[10px] font-semibold text-slate-400 block mb-0.5">Simbol Populer</span>
+                <div class="grid grid-cols-8 gap-1">
+                  <template x-for="em in emojiCategories.simbol" :key="em">
+                    <button type="button" @click="insertEmoji(em)" class="hover:bg-slate-100 rounded p-1 text-center" x-text="em"></button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <textarea id="postCaptionInput" x-model="postForm.caption" :disabled="postForm.status === 'sudah tayang'" rows="4" placeholder="Tulis caption di sini..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-500"></textarea>
           <span x-show="postForm.status === 'sudah tayang'" class="text-[11px] text-amber-700 font-medium">Caption dikunci karena konten sudah tayang di Facebook.</span>
         </div>
@@ -845,11 +979,16 @@
   <!-- ============================================== -->
   <!-- MODAL: TAMBAH LINK AFFILIATE (STATE BROWSER)   -->
   <!-- ============================================== -->
-  <div x-show="affiliateLinkModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative" @click.away="affiliateLinkModalOpen = false">
-      <div class="flex items-center space-x-2 text-blue-900 mb-2">
-        <span class="material-symbols-outlined text-2xl">sell</span>
-        <h3 class="text-base font-bold text-slate-900">Link Affiliate & Pelacakan</h3>
+  <div x-show="affiliateLinkModalOpen" class="fixed inset-0 z-[70] overflow-y-auto bg-slate-900/50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2 text-blue-900">
+          <span class="material-symbols-outlined text-2xl">sell</span>
+          <h3 class="text-base font-bold text-slate-900">Link Affiliate & Pelacakan</h3>
+        </div>
+        <button type="button" @click="affiliateLinkModalOpen = false" class="text-slate-400 hover:text-slate-600">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
       <p class="text-xs text-slate-600 mb-3">Salin tag ini ke dashboard Shopee sebagai <strong>Tag_link1</strong> saat membuat tautan:</p>
       
@@ -879,8 +1018,13 @@
   <!-- MODAL: TANDAI SUDAH TAYANG (INPUT FB URL)      -->
   <!-- ============================================== -->
   <div x-show="tayangModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative" @click.away="!isSavingTayang && (tayangModalOpen = false)">
-      <h3 class="text-base font-bold text-slate-900 mb-1">Tandai Konten Sudah Tayang</h3>
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-base font-bold text-slate-900">Tandai Konten Sudah Tayang</h3>
+        <button type="button" :disabled="isSavingTayang" @click="tayangModalOpen = false" class="text-slate-400 hover:text-slate-600 disabled:opacity-30">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
       <p class="text-xs text-slate-500 mb-4">Masukkan tautan postingan Facebook yang telah diterbitkan untuk arsip.</p>
 
       <form @submit.prevent="submitTayangForm()" class="space-y-4">
@@ -901,10 +1045,64 @@
   </div>
 
   <!-- ============================================== -->
+  <!-- MODAL: FORM AKUN (TAMBAH / UBAH)               -->
+  <!-- ============================================== -->
+  <div x-show="accountModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900" x-text="accountForm.id ? 'Ubah Akun' : 'Tambah Akun Baru'"></h3>
+        <button type="button" @click="accountModalOpen = false" class="text-slate-400 hover:text-slate-600">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form @submit.prevent="submitAccountForm()" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nama Akun *</label>
+          <input type="text" x-model="accountForm.nama_akun" required placeholder="Contoh: DanDaf Official Page" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Platform *</label>
+          <select x-model="accountForm.platform" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+            <option value="Facebook Page">Facebook Page</option>
+            <option value="Threads">Threads</option>
+            <option value="Meta Ads">Meta Ads</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Prefix Tracking (Maks 4 Huruf/Angka) *</label>
+          <input type="text" x-model="accountForm.prefix" maxlength="4" :disabled="accountForm.id && accountForm.has_posts" @input="accountForm.prefix = accountForm.prefix.toUpperCase().replace(/[^A-Z0-9]/g, '')" required placeholder="DD" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono uppercase bg-white disabled:bg-slate-100 disabled:text-slate-500">
+          <span x-show="accountForm.id && accountForm.has_posts" class="text-[11px] text-amber-700">Prefix dikunci karena akun sudah memiliki riwayat postingan.</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Batas Postingan per Hari *</label>
+          <input type="number" min="1" max="20" x-model.number="accountForm.batas_harian" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div class="flex items-center space-x-2 pt-1">
+          <input type="checkbox" id="accountAktifCheck" x-model="accountForm.aktif" class="rounded text-blue-900">
+          <label for="accountAktifCheck" class="text-xs font-semibold text-slate-700">Akun Aktif</label>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+          <button type="button" @click="accountModalOpen = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg">Batal</button>
+          <button type="submit" :disabled="isSavingAccount" class="px-4 py-2 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center space-x-1">
+            <span x-show="isSavingAccount" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            <span>Simpan Akun</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
   <!-- MODAL 3: DIALOG KONFIRMASI (PENGGANTI ALERT)   -->
   <!-- ============================================== -->
-  <div x-show="confirmDialog.open" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-sm w-full border border-slate-200 p-5 shadow-xl relative" @click.away="confirmDialog.open = false">
+  <div x-show="confirmDialog.open" class="fixed inset-0 z-[80] overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-sm w-full border border-slate-200 p-5 shadow-xl relative">
       <div class="flex items-center space-x-3 mb-3 text-rose-600">
         <span class="material-symbols-outlined text-2xl">warning</span>
         <h4 class="font-bold text-slate-900 text-sm" x-text="confirmDialog.title"></h4>
@@ -912,7 +1110,7 @@
       <p class="text-xs text-slate-600 mb-5 leading-relaxed" x-text="confirmDialog.message"></p>
       <div class="flex justify-end space-x-2">
         <button type="button" @click="confirmDialog.open = false" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded">Batal</button>
-        <button type="button" @click="executeConfirmAction()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded">Hapus</button>
+        <button type="button" @click="executeConfirmAction()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded" x-text="confirmDialog.buttonText || 'Hapus'"></button>
       </div>
     </div>
   </div>
@@ -947,13 +1145,15 @@
         // Data Store
         products: [],
         categories: [],
+        accounts: [],
         selectedProduct: null,
         productBatches: [],
         settings: {
           cloudinary_cloud_name: '',
           cloudinary_preset: '',
           cloudinary_api_key: '',
-          tracking_prefix: 'DANDAF'
+          cloudinary_api_secret: '',
+          has_api_secret: false
         },
 
         // Filter Produk
@@ -982,6 +1182,19 @@
         uploadProgressPercent: 0,
         uploadStatusText: '',
 
+        // Akun Management State
+        accountModalOpen: false,
+        isSavingAccount: false,
+        accountForm: {
+          id: '',
+          nama_akun: '',
+          platform: 'Facebook Page',
+          prefix: '',
+          batas_harian: 3,
+          aktif: true,
+          has_posts: false
+        },
+
         // Postingan & Workflow State
         posts: [],
         postFilterStatus: '',
@@ -993,8 +1206,24 @@
         postMediaOptions: [],
         tempAffiliateLink: '',
         initialPostFormJson: '',
+
+        // Pencarian Produk di Form Postingan
+        productSearchInput: '',
+        productDropdownOpen: false,
+        highlightedProductIndex: 0,
+
+        // Emoji Picker State
+        emojiPickerOpen: false,
+        emojiCategories: {
+          wajah: ['😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😊', '😍', '🥰', '😘', '😋', '😎', '🤩', '🤔', '🥳'],
+          tangan: ['👍', '👏', '🙌', '🤝', '✌️', '🤞', '👊', '✊', '🙏', '👉', '👈', '👆', '👇', '✍️', '💪', '✨'],
+          objek: ['📦', '🎁', '🛍️', '🛒', '🏷️', '📱', '💻', '📷', '🔍', '💡', '💰', '💵', '💳', '🚚', '🛵', '🏠'],
+          simbol: ['❤️', '💖', '🔥', '⭐', '🌟', '💥', '💯', '⚠️', '❗', '❓', '⏰', '⏳', '📌', '📍', '📢', '🚀']
+        },
+
         postForm: {
           id: '',
+          akun_id: '',
           produk_id: '',
           tipe: 'TEKS',
           media_ids: [],
@@ -1014,6 +1243,7 @@
         confirmDialog: {
           open: false,
           title: '',
+          buttonText: 'Hapus',
           message: '',
           action: null
         },
@@ -1054,6 +1284,7 @@
               if (response && response.ok && response.data) {
                 self.products = response.data.products || [];
                 self.posts = response.data.posts || [];
+                self.accounts = response.data.accounts || [];
                 self.settings = Object.assign(self.settings, response.data.settings || {});
                 self.extractCategories();
               } else {
@@ -1138,6 +1369,7 @@
           this.confirmDialog = {
             open: true,
             title: 'Hapus Produk?',
+            buttonText: 'Hapus',
             message: 'Semua berkas media yang terkait dengan produk ' + prod.nama + ' (' + prod.kode_produk + ') juga akan dihapus permanen dari basis data.',
             action: function() {
               self.executeDeleteProduct(prod.id);
@@ -1229,6 +1461,30 @@
           this.uploadProgressPercent = 0;
           this.uploadStatusText = 'Menyiapkan berkas...';
 
+          // Ambil urutan batch dari server
+          var batchInfo = await new Promise(function(resolve) {
+            google.script.run
+              .withSuccessHandler(function(res) {
+                if (res && res.ok && res.data) {
+                  resolve(res.data);
+                } else {
+                  var d = new Date();
+                  var yy = String(d.getFullYear()).slice(-2);
+                  var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+                  var dd = ('0' + d.getDate()).slice(-2);
+                  resolve({ batchSeq: '01', datePart: yy + mm + dd });
+                }
+              })
+              .withFailureHandler(function() {
+                var d = new Date();
+                var yy = String(d.getFullYear()).slice(-2);
+                var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+                var dd = ('0' + d.getDate()).slice(-2);
+                resolve({ batchSeq: '01', datePart: yy + mm + dd });
+              })
+              .getNextBatchSequence('');
+          });
+
           var uploadedMediaList = [];
           var batchId = 'batch_' + Date.now();
           var cloudName = this.settings.cloudinary_cloud_name;
@@ -1240,11 +1496,16 @@
             var mediaType = file.type.indexOf('video') !== -1 ? 'VIDEO' : 'FOTO';
             self.uploadStatusText = 'Mengunggah (' + (i + 1) + '/' + self.selectedFiles.length + '): ' + file.name;
 
+            // Format public_id: CAM-{YYMMDD}-{URUT_BATCH}-{ID 5 karakter}
+            var randId = Math.random().toString(36).substring(2, 7);
+            var publicIdName = 'CAM-' + batchInfo.datePart + '-' + batchInfo.batchSeq + '-' + randId;
+
             try {
               var formData = new FormData();
               formData.append('file', file);
               formData.append('upload_preset', uploadPreset);
               formData.append('folder', folderPath);
+              formData.append('public_id', publicIdName);
 
               var uploadUrl = 'https://api.cloudinary.com/v1_1/' + cloudName + '/auto/upload';
               var res = await fetch(uploadUrl, { method: 'POST', body: formData });
@@ -1258,7 +1519,9 @@
                   media_url: resData.secure_url,
                   media_type: mediaType,
                   content_type: self.batchForm.contentType,
-                  catatan: self.batchForm.catatan
+                  catatan: self.batchForm.catatan,
+                  cloudinary_public_id: resData.public_id || (folderPath + '/' + publicIdName),
+                  cloudinary_resource_type: resData.resource_type || (mediaType === 'VIDEO' ? 'video' : 'image')
                 });
               }
             } catch (err) {
@@ -1303,14 +1566,21 @@
           this.confirmDialog = {
             open: true,
             title: 'Hapus Aset Media?',
-            message: 'Aset ini akan dihapus dari basis data manajer postingan.',
+            buttonText: 'Hapus Permanen',
+            message: 'Aset media ini akan dihapus permanen dari Cloudinary dan database. Tindakan ini tidak dapat dibatalkan.',
             action: function() {
               google.script.run
                 .withSuccessHandler(function(res) {
                   if (res && res.ok) {
-                    self.showToast('Media dihapus!');
+                    self.showToast(res.message || 'Media berhasil dihapus.');
                     self.loadProductMedia(self.selectedProduct.id);
+                    self.loadInitialData();
+                  } else {
+                    self.showToast(res ? res.message : 'Gagal menghapus media.');
                   }
+                })
+                .withFailureHandler(function(err) {
+                  self.showToast('Galat server: ' + err.message);
                 })
                 .deleteMedia(mediaId);
             }
@@ -1322,18 +1592,99 @@
           this.confirmDialog = {
             open: true,
             title: 'Hapus Seluruh Batch?',
-            message: 'Semua media dalam batch ini akan dihapus dari daftar.',
+            buttonText: 'Hapus Permanen',
+            message: 'Semua berkas media dalam batch ini akan dihapus permanen dari Cloudinary dan database. Tindakan ini tidak dapat dibatalkan.',
             action: function() {
               google.script.run
                 .withSuccessHandler(function(res) {
                   if (res && res.ok) {
-                    self.showToast('Batch media dihapus!');
+                    self.showToast(res.message || 'Batch media berhasil dihapus.');
                     self.loadProductMedia(self.selectedProduct.id);
+                    self.loadInitialData();
+                  } else {
+                    self.showToast(res ? res.message : 'Gagal menghapus batch.');
                   }
+                })
+                .withFailureHandler(function(err) {
+                  self.showToast('Galat server: ' + err.message);
                 })
                 .deleteBatch(batchId);
             }
           };
+        },
+
+        // --- MANAJEMEN AKUN ---
+        openAccountModal: function() {
+          this.accountForm = {
+            id: '',
+            nama_akun: '',
+            platform: 'Facebook Page',
+            prefix: '',
+            batas_harian: 3,
+            aktif: true,
+            has_posts: false
+          };
+          this.accountModalOpen = true;
+        },
+
+        editAccount: function(acc) {
+          this.accountForm = {
+            id: acc.id,
+            nama_akun: acc.nama_akun,
+            platform: acc.platform,
+            prefix: acc.prefix,
+            batas_harian: acc.batas_harian || 3,
+            aktif: acc.aktif,
+            has_posts: acc.has_posts
+          };
+          this.accountModalOpen = true;
+        },
+
+        submitAccountForm: function() {
+          var self = this;
+          this.isSavingAccount = true;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              self.isSavingAccount = false;
+              if (res && res.ok) {
+                self.accountModalOpen = false;
+                self.showToast(res.message);
+                self.refreshAccounts();
+              } else {
+                self.showToast('Gagal: ' + res.message);
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isSavingAccount = false;
+              self.showToast('Galat: ' + err.message);
+            })
+            .saveAccount(this.accountForm);
+        },
+
+        toggleAccount: function(acc) {
+          var self = this;
+          var newStatus = !acc.aktif;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.ok) {
+                self.showToast('Status akun ' + acc.nama_akun + ' diperbarui.');
+                self.refreshAccounts();
+              } else {
+                self.showToast('Gagal: ' + res.message);
+              }
+            })
+            .toggleAccountStatus(acc.id, newStatus);
+        },
+
+        refreshAccounts: function() {
+          var self = this;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.ok) {
+                self.accounts = res.data || [];
+              }
+            })
+            .getAccounts();
         },
 
         // --- PENGATURAN ---
@@ -1345,6 +1696,10 @@
               self.isSavingSettings = false;
               if (res && res.ok) {
                 self.showToast('Pengaturan berhasil disimpan!');
+                if (self.settings.cloudinary_api_secret) {
+                  self.settings.has_api_secret = true;
+                  self.settings.cloudinary_api_secret = '';
+                }
               } else {
                 self.showToast('Gagal: ' + res.message);
               }
@@ -1357,11 +1712,15 @@
         },
 
         checkCloudinaryConfig: function() {
-          if (!this.settings.cloudinary_cloud_name || !this.settings.cloudinary_preset) {
-            this.showToast('Cloud Name dan Preset wajib diisi!');
+          if (!this.settings.cloudinary_cloud_name || !this.settings.cloudinary_preset || !this.settings.cloudinary_api_key) {
+            this.showToast('Cloud Name, Upload Preset, dan API Key wajib diisi!');
             return;
           }
-          this.showToast('Konfigurasi Cloudinary tersimpan siap dipakai!');
+          if (!this.settings.has_api_secret && !this.settings.cloudinary_api_secret) {
+            this.showToast('API Secret belum tersimpan!');
+            return;
+          }
+          this.showToast('Konfigurasi Cloudinary siap dipakai!');
         },
 
         // --- MANAJEMEN POSTINGAN & WORKFLOW ---
@@ -1387,16 +1746,117 @@
             });
         },
 
+        get selectableAccounts() {
+          var self = this;
+          return this.accounts.filter(function(a) {
+            return a.aktif || (self.postForm.id && self.postForm.akun_id === a.id);
+          });
+        },
+
         get selectedMediaCountText() {
           var count = this.postForm.media_ids.length;
           if (this.postForm.tipe === 'VIDEO') return count + ' video dipilih';
           return count + ' foto dipilih';
         },
 
+        // Helper Ekstensi Media
+        getMediaFileType: function(med) {
+          if (!med) return 'FOTO';
+          if (med.media_type) return String(med.media_type).toUpperCase();
+          var url = String(med.media_url || '').toLowerCase();
+          if (url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm') || url.indexOf('.mp4?') !== -1) {
+            return 'VIDEO';
+          }
+          return 'FOTO';
+        },
+
+        get filteredPostMedia() {
+          var self = this;
+          if (this.postForm.tipe === 'TEKS') return [];
+          return this.postMediaOptions.filter(function(m) {
+            return self.getMediaFileType(m) === self.postForm.tipe;
+          });
+        },
+
+        // Pencarian Produk di Form Postingan
+        get filteredSearchProducts() {
+          var q = (this.productSearchInput || '').toLowerCase().trim();
+          if (!q) return this.products;
+          return this.products.filter(function(p) {
+            return (p.nama && p.nama.toLowerCase().indexOf(q) !== -1) || (p.kode_produk && p.kode_produk.toLowerCase().indexOf(q) !== -1);
+          });
+        },
+
+        selectProductItem: function(prod) {
+          this.postForm.produk_id = prod.id;
+          this.productSearchInput = prod.kode_produk + ' - ' + prod.nama;
+          this.productDropdownOpen = false;
+          this.onPostProductChange();
+        },
+
+        clearSelectedProduct: function() {
+          this.postForm.produk_id = '';
+          this.productSearchInput = '';
+          this.productDropdownOpen = true;
+          this.onPostProductChange();
+        },
+
+        navigateProductList: function(direction) {
+          var max = this.filteredSearchProducts.length;
+          if (max === 0) return;
+          this.productDropdownOpen = true;
+          this.highlightedProductIndex = (this.highlightedProductIndex + direction + max) % max;
+        },
+
+        selectHighlightedProduct: function() {
+          if (this.filteredSearchProducts.length > 0) {
+            var selected = this.filteredSearchProducts[this.highlightedProductIndex] || this.filteredSearchProducts[0];
+            this.selectProductItem(selected);
+          }
+        },
+
+        onPostTypeChange: function() {
+          var self = this;
+          if (this.postForm.tipe === 'TEKS') {
+            this.postForm.media_ids = [];
+          } else {
+            // Bersihkan media yang tidak cocok dengan tipe yang baru dipilih
+            this.postForm.media_ids = this.postForm.media_ids.filter(function(mId) {
+              var found = self.postMediaOptions.find(function(m) { return m.id === mId; });
+              return found && self.getMediaFileType(found) === self.postForm.tipe;
+            });
+            if (this.postForm.tipe === 'VIDEO' && this.postForm.media_ids.length > 1) {
+              this.postForm.media_ids = [this.postForm.media_ids[0]];
+            }
+          }
+        },
+
+        onPostAccountChange: function() {
+          // Akun berubah, reset kode pelacakan form jika baru
+          if (!this.postForm.id) {
+            this.postForm.kode_pelacakan = '';
+          }
+        },
+
+        insertEmoji: function(emojiChar) {
+          var textarea = document.getElementById('postCaptionInput');
+          if (!textarea) return;
+          var start = textarea.selectionStart;
+          var end = textarea.selectionEnd;
+          var current = this.postForm.caption || '';
+          this.postForm.caption = current.substring(0, start) + emojiChar + current.substring(end);
+          this.$nextTick(function() {
+            textarea.focus();
+            textarea.setSelectionRange(start + emojiChar.length, start + emojiChar.length);
+          });
+        },
+
         openPostModal: function() {
+          var firstActiveAccount = this.accounts.find(function(a) { return a.aktif; });
           this.postForm = {
             id: '',
-            produk_id: this.products.length > 0 ? this.products[0].id : '',
+            akun_id: firstActiveAccount ? firstActiveAccount.id : '',
+            produk_id: '',
             tipe: 'TEKS',
             media_ids: [],
             tanggal_rencana: new Date().toISOString().substring(0, 10),
@@ -1406,16 +1866,18 @@
             caption: '',
             status: 'draf'
           };
+          this.productSearchInput = '';
+          this.productDropdownOpen = false;
+          this.emojiPickerOpen = false;
           this.initialPostFormJson = JSON.stringify(this.postForm);
           this.postModalOpen = true;
-          if (this.postForm.produk_id) {
-            this.loadProductMediaForPost(this.postForm.produk_id);
-          }
+          this.postMediaOptions = [];
         },
 
         editPost: function(post) {
           this.postForm = {
             id: post.id,
+            akun_id: post.akun_id || (this.accounts.length > 0 ? this.accounts[0].id : ''),
             produk_id: post.produk_id,
             tipe: post.tipe || 'TEKS',
             media_ids: Array.isArray(post.media_ids) ? post.media_ids.slice() : [],
@@ -1426,6 +1888,10 @@
             caption: post.caption || '',
             status: post.status || 'draf'
           };
+          var prod = this.products.find(function(p) { return p.id === post.produk_id; });
+          this.productSearchInput = prod ? prod.kode_produk + ' - ' + prod.nama : '';
+          this.productDropdownOpen = false;
+          this.emojiPickerOpen = false;
           this.initialPostFormJson = JSON.stringify(this.postForm);
           this.postModalOpen = true;
           this.loadProductMediaForPost(post.produk_id);
@@ -1438,6 +1904,7 @@
             this.confirmDialog = {
               open: true,
               title: 'Batalkan Perubahan?',
+              buttonText: 'Buang Perubahan',
               message: 'Perubahan belum disimpan akan hilang.',
               action: function() {
                 self.postModalOpen = false;
@@ -1450,8 +1917,8 @@
 
         openAffiliateLinkModal: function() {
           var self = this;
-          if (!this.postForm.produk_id || !this.postForm.tanggal_rencana) {
-            this.showToast('Pilih produk dan tanggal rencana terlebih dahulu.');
+          if (!this.postForm.produk_id || !this.postForm.tanggal_rencana || !this.postForm.akun_id) {
+            this.showToast('Pilih akun, produk, dan tanggal rencana terlebih dahulu.');
             return;
           }
           this.tempAffiliateLink = this.postForm.link_affiliate || '';
@@ -1472,7 +1939,7 @@
                 self.isLoadingTrackingCode = false;
                 self.showToast('Galat server: ' + err.message);
               })
-              .getNextTrackingCode(this.settings.tracking_prefix, this.postForm.tanggal_rencana);
+              .getNextTrackingCode(this.postForm.akun_id, this.postForm.tanggal_rencana);
           } else {
             this.affiliateLinkModalOpen = true;
           }
@@ -1620,6 +2087,7 @@
           this.confirmDialog = {
             open: true,
             title: 'Arsipkan Postingan?',
+            buttonText: 'Arsipkan',
             message: 'Postingan ' + post.kode_pelacakan + ' akan diarsipkan dari daftar aktif.',
             action: function() {
               google.script.run

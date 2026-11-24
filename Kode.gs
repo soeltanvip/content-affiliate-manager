@@ -18,15 +18,19 @@ function setupDatabase() {
     },
     {
       name: 'media',
-      headers: ['id', 'produk_id', 'batch_id', 'batch_nama', 'media_url', 'media_type', 'content_type', 'catatan', 'created_at']
+      headers: ['id', 'produk_id', 'batch_id', 'batch_nama', 'media_url', 'media_type', 'content_type', 'catatan', 'created_at', 'cloudinary_public_id', 'cloudinary_resource_type']
     },
     {
       name: 'pengaturan',
       headers: ['kunci', 'nilai']
     },
     {
+      name: 'akun',
+      headers: ['id', 'nama_akun', 'platform', 'prefix', 'batas_harian', 'aktif', 'created_at']
+    },
+    {
       name: 'postingan',
-      headers: ['id', 'produk_id', 'media_ids', 'tipe', 'tanggal_rencana', 'jam_tayang', 'kode_pelacakan', 'link_affiliate', 'caption', 'status', 'url_postingan', 'created_at', 'updated_at']
+      headers: ['id', 'produk_id', 'media_ids', 'tipe', 'tanggal_rencana', 'jam_tayang', 'kode_pelacakan', 'link_affiliate', 'caption', 'status', 'url_postingan', 'created_at', 'updated_at', 'akun_id']
     }
   ];
 
@@ -39,7 +43,58 @@ function setupDatabase() {
     sheet.getRange(1, 1, 1, tbl.headers.length).setValues([tbl.headers]);
   });
 
+  // Migrasi pengaturan prefix & kuota lama ke akun tunggal pertama
+  migrateSettingsToAccount(ss);
+
   return { ok: true, success: true, message: 'Database setup completed.' };
+}
+
+// Migrasi jika sheet akun kosong dan sheet pengaturan menyimpan tracking_prefix / limit
+function migrateSettingsToAccount(ss) {
+  const akunSheet = ss.getSheetByName('akun');
+  const pengSheet = ss.getSheetByName('pengaturan');
+  if (!akunSheet || !pengSheet) return;
+
+  const akunData = akunSheet.getDataRange().getValues();
+  if (akunData.length <= 1) {
+    const pengData = pengSheet.getDataRange().getValues();
+    let prefix = '';
+    let batas = 3;
+    const remainingRows = [];
+
+    for (let i = 1; i < pengData.length; i++) {
+      const k = String(pengData[i][0]).trim();
+      const v = String(pengData[i][1]).trim();
+      if (k === 'tracking_prefix') {
+        prefix = v;
+      } else if (k === 'daily_post_limit') {
+        batas = parseInt(v, 10) || 3;
+      } else if (k) {
+        remainingRows.push([k, v]);
+      }
+    }
+
+    if (prefix || batas) {
+      const newAccId = 'acc_' + Utilities.getUuid();
+      const nowStr = new Date().toISOString();
+      akunSheet.appendRow([
+        newAccId,
+        'Akun Utama',
+        'Facebook Page',
+        (prefix || 'DD').toUpperCase().substring(0, 4),
+        batas,
+        true,
+        nowStr
+      ]);
+
+      // Tulis ulang pengaturan tanpa tracking_prefix dan daily_post_limit
+      pengSheet.clearContents();
+      pengSheet.getRange(1, 1, 1, 2).setValues([['kunci', 'nilai']]);
+      if (remainingRows.length > 0) {
+        pengSheet.getRange(2, 1, remainingRows.length, 2).setValues(remainingRows);
+      }
+    }
+  }
 }
 
 // Shared serializer untuk memastikan tipe data JSON-safe untuk google.script.run
@@ -68,12 +123,14 @@ function getInitialData() {
     const settings = getSettingsInternal();
     const products = getProductsInternal();
     const posts = getPostsInternal();
+    const accounts = getAccountsInternal();
     return {
       ok: true,
       success: true,
       data: serializeForClient({
         settings: settings,
         products: products,
+        accounts: accounts,
         posts: posts
       })
     };
@@ -236,7 +293,9 @@ function getMediaByProduct(productId) {
           media_type: String(data[i][5]),
           content_type: String(data[i][6]),
           catatan: String(data[i][7]),
-          created_at: data[i][8] instanceof Date ? data[i][8].toISOString() : String(data[i][8])
+          created_at: data[i][8] instanceof Date ? data[i][8].toISOString() : String(data[i][8]),
+          cloudinary_public_id: String(data[i][9] || ''),
+          cloudinary_resource_type: String(data[i][10] || '')
         });
       }
     }
@@ -273,12 +332,14 @@ function saveMediaBatch(batchPayload) {
         item.media_type,
         item.content_type,
         item.catatan || '',
-        nowStr
+        nowStr,
+        item.cloudinary_public_id || '',
+        item.cloudinary_resource_type || ''
       ];
     });
 
     const startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, rowsToAppend.length, 9).setValues(rowsToAppend);
+    sheet.getRange(startRow, 1, rowsToAppend.length, 11).setValues(rowsToAppend);
 
     return { ok: true, success: true, message: 'Batch media tersimpan.' };
   } catch (err) {
@@ -288,52 +349,257 @@ function saveMediaBatch(batchPayload) {
   }
 }
 
-// Hapus satuan media
+// Dapatkan nomor urut batch harian untuk penamaan public_id
+function getNextBatchSequence(dateStr) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('media');
+    let datePart = '';
+    if (dateStr) {
+      datePart = String(dateStr).replace(/[^0-9]/g, '').slice(2, 8);
+    }
+    if (datePart.length !== 6) {
+      const d = new Date();
+      const yy = String(d.getFullYear()).slice(-2);
+      const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+      const dd = ('0' + d.getDate()).slice(-2);
+      datePart = yy + mm + dd;
+    }
+
+    let maxSeq = 0;
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      const prefixPattern = 'CAM-' + datePart + '-';
+      for (let i = 1; i < data.length; i++) {
+        const pubId = String(data[i][9] || '');
+        const targetStr = pubId.indexOf('/') !== -1 ? pubId.split('/').pop() : pubId;
+        if (targetStr.indexOf(prefixPattern) === 0) {
+          const parts = targetStr.split('-');
+          if (parts.length >= 3) {
+            const seq = parseInt(parts[2], 10);
+            if (!isNaN(seq) && seq > maxSeq) {
+              maxSeq = seq;
+            }
+          }
+        }
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    const seqStr = nextSeq < 10 ? '0' + nextSeq : String(nextSeq);
+    return {
+      ok: true,
+      success: true,
+      data: {
+        batchSeq: seqStr,
+        datePart: datePart
+      }
+    };
+  } catch (err) {
+    return { ok: false, success: false, message: 'Gagal mengambil nomor batch: ' + err.message };
+  }
+}
+
+// Helper ekstrak public_id dari Cloudinary media URL (untuk media lama)
+function extractPublicIdFromUrl(url) {
+  if (!url) return '';
+  const clean = String(url).split('?')[0];
+  const uploadIdx = clean.indexOf('/upload/');
+  if (uploadIdx === -1) return '';
+  let path = clean.substring(uploadIdx + 8);
+  path = path.replace(/^v\d+\//, '');
+  const dotIdx = path.lastIndexOf('.');
+  if (dotIdx !== -1) {
+    path = path.substring(0, dotIdx);
+  }
+  return path;
+}
+
+// Helper penghapusan file di Cloudinary menggunakan SHA-1 Signature
+function deleteFromCloudinary(publicId, resourceType) {
+  const scriptProps = PropertiesService.getScriptProperties();
+  const apiSecret = scriptProps.getProperty('CLOUDINARY_API_SECRET');
+  const settings = getSettingsInternal();
+  const cloudName = settings.cloudinary_cloud_name;
+  const apiKey = settings.cloudinary_api_key;
+
+  if (!apiSecret || !cloudName || !apiKey) {
+    throw new Error('Konfigurasi Cloudinary (Cloud Name, API Key, dan API Secret di Pengaturan) belum lengkap.');
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const toSign = 'public_id=' + publicId + '&timestamp=' + timestamp + apiSecret;
+  const rawDigest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, toSign, Utilities.Charset.UTF_8);
+  let signature = '';
+  for (let i = 0; i < rawDigest.length; i++) {
+    let byteVal = rawDigest[i];
+    if (byteVal < 0) byteVal += 256;
+    let byteHex = byteVal.toString(16);
+    if (byteHex.length === 1) byteHex = '0' + byteHex;
+    signature += byteHex;
+  }
+
+  const resType = (resourceType || 'image').toLowerCase() === 'video' ? 'video' : 'image';
+  const url = 'https://api.cloudinary.com/v1_1/' + cloudName + '/' + resType + '/destroy';
+
+  const payload = {
+    public_id: publicId,
+    timestamp: timestamp,
+    api_key: apiKey,
+    signature: signature
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    payload: payload,
+    muteHttpExceptions: true
+  });
+
+  const resCode = response.getResponseCode();
+  const resText = response.getContentText();
+  let json = {};
+  try {
+    json = JSON.parse(resText);
+  } catch (e) {
+    throw new Error('Gagal memproses respon Cloudinary: ' + resText);
+  }
+
+  if (resCode >= 200 && resCode < 300 && (json.result === 'ok' || json.result === 'not found')) {
+    return true;
+  }
+  throw new Error('Cloudinary: ' + (json.error ? json.error.message : resText));
+}
+
+// Cek apakah media sedang digunakan di postingan yang akan tayang
+function checkMediaUsageInActivePosts(ss, mediaIdsToCheck) {
+  const postSheet = ss.getSheetByName('postingan');
+  if (!postSheet) return false;
+  const data = postSheet.getDataRange().getValues();
+  const targetIds = {};
+  mediaIdsToCheck.forEach(function(id) { targetIds[id] = true; });
+
+  const activeStatuses = {
+    'menunggu persetujuan': true,
+    'disetujui': true,
+    'terjadwal': true
+  };
+
+  for (let i = 1; i < data.length; i++) {
+    const status = String(data[i][9] || '').toLowerCase().trim();
+    if (activeStatuses[status]) {
+      const rowMediaIds = String(data[i][2] || '').split(',').map(function(s) { return s.trim(); });
+      for (let j = 0; j < rowMediaIds.length; j++) {
+        if (targetIds[rowMediaIds[j]]) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Hapus satuan media dari Cloudinary lalu hapus baris sheet
 function deleteMedia(mediaId) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('media');
+    if (!sheet) return { ok: false, success: false, message: 'Sheet media tidak ditemukan.' };
+
+    if (checkMediaUsageInActivePosts(ss, [mediaId])) {
+      return { ok: false, success: false, message: 'Media ini dipakai postingan yang akan tayang.' };
+    }
+
     const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    let targetRow = null;
 
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(mediaId)) {
-        sheet.deleteRow(i + 1);
-        return { ok: true, success: true, message: 'Media terhapus.' };
+        rowIndex = i + 1;
+        targetRow = data[i];
+        break;
       }
     }
-    return { ok: false, success: false, message: 'Media tidak ditemukan.' };
+
+    if (rowIndex === -1) {
+      return { ok: false, success: false, message: 'Media tidak ditemukan.' };
+    }
+
+    let pubId = String(targetRow[9] || '');
+    if (!pubId) {
+      pubId = extractPublicIdFromUrl(String(targetRow[4] || ''));
+    }
+    const resType = String(targetRow[10] || (String(targetRow[5] || '').toUpperCase() === 'VIDEO' ? 'video' : 'image'));
+
+    if (pubId) {
+      deleteFromCloudinary(pubId, resType);
+    }
+
+    sheet.deleteRow(rowIndex);
+    return { ok: true, success: true, message: 'Media berhasil dihapus permanen dari Cloudinary dan database.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { ok: false, success: false, message: 'Gagal menghapus media: ' + err.message };
   } finally {
     lock.releaseLock();
   }
 }
 
-// Hapus seluruh batch media
+// Hapus seluruh batch media dari Cloudinary lalu hapus baris sheet
 function deleteBatch(batchId) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('media');
-    const data = sheet.getDataRange().getValues();
+    if (!sheet) return { ok: false, success: false, message: 'Sheet media tidak ditemukan.' };
 
-    for (let i = data.length - 1; i >= 1; i--) {
+    const data = sheet.getDataRange().getValues();
+    const batchMediaIds = [];
+    const rowsToDelete = [];
+
+    for (let i = 1; i < data.length; i++) {
       if (String(data[i][2]) === String(batchId)) {
-        sheet.deleteRow(i + 1);
+        batchMediaIds.push(String(data[i][0]));
+        rowsToDelete.push({
+          rowIndex: i + 1,
+          pubId: String(data[i][9] || '') || extractPublicIdFromUrl(String(data[i][4] || '')),
+          resType: String(data[i][10] || (String(data[i][5] || '').toUpperCase() === 'VIDEO' ? 'video' : 'image'))
+        });
       }
     }
-    return { ok: true, success: true, message: 'Batch terhapus.' };
+
+    if (rowsToDelete.length === 0) {
+      return { ok: true, success: true, message: 'Batch tidak ditemukan atau sudah kosong.' };
+    }
+
+    if (checkMediaUsageInActivePosts(ss, batchMediaIds)) {
+      return { ok: false, success: false, message: 'Media ini dipakai postingan yang akan tayang.' };
+    }
+
+    // Hapus satu per satu dari Cloudinary
+    for (let k = 0; k < rowsToDelete.length; k++) {
+      const item = rowsToDelete[k];
+      if (item.pubId) {
+        deleteFromCloudinary(item.pubId, item.resType);
+      }
+    }
+
+    // Hapus dari sheet mulai dari baris terbawah
+    for (let j = rowsToDelete.length - 1; j >= 0; j--) {
+      sheet.deleteRow(rowsToDelete[j].rowIndex);
+    }
+
+    return { ok: true, success: true, message: 'Batch media berhasil dihapus permanen dari Cloudinary dan database.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { ok: false, success: false, message: 'Gagal menghapus batch: ' + err.message };
   } finally {
     lock.releaseLock();
   }
 }
 
-// Pembacaan Pengaturan Internal (Key-Value)
+// Pembacaan Pengaturan Internal (Key-Value Khusus Cloudinary)
 function getSettingsInternal() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName('pengaturan');
@@ -346,18 +612,20 @@ function getSettingsInternal() {
   const settings = {
     cloudinary_cloud_name: '',
     cloudinary_preset: '',
-    cloudinary_api_key: '',
-    tracking_prefix: 'DD',
-    daily_post_limit: 3
+    cloudinary_api_key: ''
   };
 
   for (let i = 1; i < data.length; i++) {
     const key = String(data[i][0]).trim();
     const val = String(data[i][1]).trim();
-    if (key) {
+    if (key && Object.prototype.hasOwnProperty.call(settings, key)) {
       settings[key] = val;
     }
   }
+
+  const scriptProps = PropertiesService.getScriptProperties();
+  settings.has_api_secret = !!scriptProps.getProperty('CLOUDINARY_API_SECRET');
+
   return settings;
 }
 
@@ -369,7 +637,7 @@ function getSettings() {
   }
 }
 
-// Simpan Pengaturan (Key-Value)
+// Simpan Pengaturan (Key-Value) dan API Secret terisolasi di Script Properties
 function saveSettings(payload) {
   const lock = LockService.getScriptLock();
   try {
@@ -381,14 +649,21 @@ function saveSettings(payload) {
       sheet = ss.getSheetByName('pengaturan');
     }
 
-    // Bersihkan data lama, tulis ulang header dan pasangan key-value
+    // Simpan API Secret ke Script Properties secara terisolasi jika diinput
+    if (payload.cloudinary_api_secret && String(payload.cloudinary_api_secret).trim() !== '') {
+      PropertiesService.getScriptProperties().setProperty('CLOUDINARY_API_SECRET', String(payload.cloudinary_api_secret).trim());
+    }
+
+    // Bersihkan data lama, tulis ulang header dan pasangan key-value Cloudinary publik
     sheet.clearContents();
     sheet.getRange(1, 1, 1, 2).setValues([['kunci', 'nilai']]);
 
+    const allowedKeys = ['cloudinary_cloud_name', 'cloudinary_preset', 'cloudinary_api_key'];
     const rows = [];
-    for (const key in payload) {
-      if (Object.prototype.hasOwnProperty.call(payload, key)) {
-        rows.push([key, String(payload[key] || '')]);
+    for (let i = 0; i < allowedKeys.length; i++) {
+      const k = allowedKeys[i];
+      if (payload[k] !== undefined) {
+        rows.push([k, String(payload[k] || '')]);
       }
     }
 
@@ -397,6 +672,175 @@ function saveSettings(payload) {
     }
 
     return { ok: true, success: true, message: 'Pengaturan berhasil disimpan.' };
+  } catch (err) {
+    return { ok: false, success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ==============================================
+// MODUL AKUN
+// ==============================================
+
+function getAccountsInternal() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('akun');
+  if (!sheet) {
+    setupDatabase();
+    sheet = ss.getSheetByName('akun');
+  }
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  // Hitung penggunaan akun pada postingan
+  const postSheet = ss.getSheetByName('postingan');
+  const postUsage = {};
+  if (postSheet) {
+    const postData = postSheet.getDataRange().getValues();
+    for (let p = 1; p < postData.length; p++) {
+      const aId = String(postData[p][13] || '');
+      if (aId) {
+        postUsage[aId] = (postUsage[aId] || 0) + 1;
+      }
+    }
+  }
+
+  const accounts = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const accId = String(row[0]);
+    accounts.push({
+      id: accId,
+      nama_akun: String(row[1] || ''),
+      platform: String(row[2] || 'Facebook Page'),
+      prefix: String(row[3] || '').toUpperCase(),
+      batas_harian: parseInt(row[4], 10) || 3,
+      aktif: row[5] === true || String(row[5]).toLowerCase() === 'true',
+      created_at: row[6] instanceof Date ? row[6].toISOString() : String(row[6] || ''),
+      has_posts: (postUsage[accId] || 0) > 0
+    });
+  }
+  return accounts;
+}
+
+function getAccounts() {
+  try {
+    return { ok: true, success: true, data: serializeForClient(getAccountsInternal()) };
+  } catch (err) {
+    return { ok: false, success: false, message: err.message };
+  }
+}
+
+function saveAccount(payload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName('akun');
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName('akun');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const isEdit = payload.id && String(payload.id).trim() !== '';
+    const nowStr = new Date().toISOString();
+
+    let cleanPrefix = String(payload.prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleanPrefix) {
+      return { ok: false, success: false, message: 'Prefix tracking wajib berupa huruf/angka.' };
+    }
+    if (cleanPrefix.length > 4) {
+      cleanPrefix = cleanPrefix.substring(0, 4);
+    }
+
+    // Cek keunikan prefix di semua akun
+    for (let i = 1; i < data.length; i++) {
+      const rowId = String(data[i][0]);
+      const rowPrefix = String(data[i][3] || '').toUpperCase();
+      if ((!isEdit || rowId !== payload.id) && rowPrefix === cleanPrefix) {
+        return { ok: false, success: false, message: 'Prefix ' + cleanPrefix + ' sudah digunakan akun lain.' };
+      }
+    }
+
+    if (isEdit) {
+      let rowIndex = -1;
+      let existingRow = null;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(payload.id)) {
+          rowIndex = i + 1;
+          existingRow = data[i];
+          break;
+        }
+      }
+      if (rowIndex !== -1) {
+        // Cek jika akun sudah dipakai postingan
+        const postSheet = ss.getSheetByName('postingan');
+        let hasPosts = false;
+        if (postSheet) {
+          const postData = postSheet.getDataRange().getValues();
+          for (let p = 1; p < postData.length; p++) {
+            if (String(postData[p][13] || '') === String(payload.id)) {
+              hasPosts = true;
+              break;
+            }
+          }
+        }
+
+        const existingPrefix = String(existingRow[3] || '').toUpperCase();
+        if (hasPosts && existingPrefix !== cleanPrefix) {
+          return { ok: false, success: false, message: 'Prefix tidak bisa diubah karena sudah ada postingan yang memakai akun ini.' };
+        }
+
+        const aktifVal = payload.aktif !== false && String(payload.aktif) !== 'false';
+        sheet.getRange(rowIndex, 2, 1, 5).setValues([[
+          payload.nama_akun,
+          payload.platform || 'Facebook Page',
+          hasPosts ? existingPrefix : cleanPrefix,
+          parseInt(payload.batas_harian, 10) || 3,
+          aktifVal
+        ]]);
+
+        return { ok: true, success: true, message: 'Akun berhasil diperbarui.' };
+      }
+    }
+
+    // Tambah akun baru
+    const newId = 'acc_' + Utilities.getUuid();
+    sheet.appendRow([
+      newId,
+      payload.nama_akun,
+      payload.platform || 'Facebook Page',
+      cleanPrefix,
+      parseInt(payload.batas_harian, 10) || 3,
+      payload.aktif !== false && String(payload.aktif) !== 'false',
+      nowStr
+    ]);
+
+    return { ok: true, success: true, message: 'Akun berhasil ditambahkan.' };
+  } catch (err) {
+    return { ok: false, success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function toggleAccountStatus(accountId, activeStatus) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('akun');
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(accountId)) {
+        sheet.getRange(i + 1, 6).setValue(activeStatus);
+        return { ok: true, success: true, message: 'Status akun berhasil diperbarui.' };
+      }
+    }
+    return { ok: false, success: false, message: 'Akun tidak ditemukan.' };
   } catch (err) {
     return { ok: false, success: false, message: err.message };
   } finally {
@@ -430,12 +874,27 @@ function getPostsInternal() {
     }
   }
 
+  const akunSheet = ss.getSheetByName('akun');
+  const akunMap = {};
+  if (akunSheet) {
+    const aData = akunSheet.getDataRange().getValues();
+    for (let a = 1; a < aData.length; a++) {
+      akunMap[String(aData[a][0])] = {
+        nama: String(aData[a][1] || ''),
+        prefix: String(aData[a][3] || ''),
+        batas: parseInt(aData[a][4], 10) || 3
+      };
+    }
+  }
+
   const posts = [];
   const tz = Session.getScriptTimeZone();
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const pid = String(row[1] || '');
     const prodInfo = prodMap[pid] || { kode: '-', nama: 'Produk Tidak Ditemukan' };
+    const aid = String(row[13] || '');
+    const accInfo = akunMap[aid] || { nama: '-', prefix: '-', batas: 3 };
 
     let tgl = row[4];
     if (tgl instanceof Date) {
@@ -456,6 +915,9 @@ function getPostsInternal() {
       produk_id: pid,
       produk_kode: prodInfo.kode,
       produk_nama: prodInfo.nama,
+      akun_id: aid,
+      akun_nama: accInfo.nama,
+      akun_prefix: accInfo.prefix,
       media_ids: String(row[2] || '').split(',').filter(function(x) { return x.trim() !== ''; }),
       tipe: String(row[3] || 'TEKS'),
       tanggal_rencana: tgl,
@@ -494,8 +956,8 @@ function getPostDetail(postId) {
   }
 }
 
-// Mendapatkan nomor urut tracking code berikutnya tanpa menulis ke basis data
-function getNextTrackingCode(prefixInput, dateStr) {
+// Mendapatkan nomor urut tracking code berikutnya tanpa menulis ke basis data (berdasarkan akun)
+function getNextTrackingCode(akunId, dateStr) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName('postingan');
@@ -504,8 +966,18 @@ function getNextTrackingCode(prefixInput, dateStr) {
       sheet = ss.getSheetByName('postingan');
     }
 
-    const settings = getSettingsInternal();
-    let prefix = String(prefixInput || settings.tracking_prefix || 'DD').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const akunSheet = ss.getSheetByName('akun');
+    let prefix = 'DD';
+    if (akunSheet && akunId) {
+      const aData = akunSheet.getDataRange().getValues();
+      for (let a = 1; a < aData.length; a++) {
+        if (String(aData[a][0]) === String(akunId)) {
+          prefix = String(aData[a][3] || 'DD').toUpperCase();
+          break;
+        }
+      }
+    }
+    prefix = prefix.replace(/[^A-Z0-9]/g, '');
     if (!prefix) prefix = 'DD';
     if (prefix.length > 4) prefix = prefix.substring(0, 4);
 
@@ -641,12 +1113,15 @@ function savePost(payload) {
           existingStatus
         ]]);
         sheet.getRange(rowIndex, 13).setValue(nowStr);
+        if (payload.akun_id) {
+          sheet.getRange(rowIndex, 14).setValue(payload.akun_id);
+        }
 
         return {
           ok: true,
           success: true,
           message: 'Postingan berhasil diperbarui.',
-          data: { id: payload.id, kode_pelacakan: String(existingRow[6]), status: existingStatus }
+          data: { id: payload.id, kode_pelacakan: String(existingRow[6]), status: existingStatus, akun_id: payload.akun_id || existingRow[13] }
         };
       }
     }
@@ -681,7 +1156,8 @@ function savePost(payload) {
       'draf',
       '', // url_postingan
       nowStr,
-      nowStr
+      nowStr,
+      payload.akun_id || ''
     ]);
 
     return {
@@ -691,6 +1167,7 @@ function savePost(payload) {
       data: {
         id: newId,
         kode_pelacakan: trackingCode,
+        akun_id: payload.akun_id || '',
         status: 'draf'
       }
     };
@@ -733,14 +1210,26 @@ function updatePostStatus(postId, newStatus, extraData) {
       if (!jam || jam.trim() === '') {
         finalStatus = 'disetujui';
       } else {
-        const settings = getSettingsInternal();
-        const limit = parseInt(settings.daily_post_limit, 10) || 3;
+        const postAkunId = String(postRow[13] || '');
+        let limit = 3;
+        const akunSheet = ss.getSheetByName('akun');
+        if (akunSheet && postAkunId) {
+          const aData = akunSheet.getDataRange().getValues();
+          for (let a = 1; a < aData.length; a++) {
+            if (String(aData[a][0]) === postAkunId) {
+              limit = parseInt(aData[a][4], 10) || 3;
+              break;
+            }
+          }
+        }
+
         let count = 0;
         for (let j = 1; j < data.length; j++) {
           if (j + 1 === rowIndex) continue;
           const st = String(data[j][9] || '');
           const rowTgl = String(data[j][4] || '');
-          if ((st === 'terjadwal' || st === 'sudah tayang') && rowTgl.indexOf(tgl) !== -1) {
+          const rowAkunId = String(data[j][13] || '');
+          if ((st === 'terjadwal' || st === 'sudah tayang') && rowTgl.indexOf(tgl) !== -1 && (!postAkunId || rowAkunId === postAkunId)) {
             count++;
           }
         }
