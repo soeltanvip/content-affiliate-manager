@@ -478,15 +478,9 @@ function checkMediaUsageInActivePosts(ss, mediaIdsToCheck) {
   const targetIds = {};
   mediaIdsToCheck.forEach(function(id) { targetIds[id] = true; });
 
-  const activeStatuses = {
-    'menunggu persetujuan': true,
-    'disetujui': true,
-    'terjadwal': true
-  };
-
   for (let i = 1; i < data.length; i++) {
     const status = String(data[i][9] || '').toLowerCase().trim();
-    if (activeStatuses[status]) {
+    if (status === 'terjadwal') {
       const rowMediaIds = String(data[i][2] || '').split(',').map(function(s) { return s.trim(); });
       for (let j = 0; j < rowMediaIds.length; j++) {
         if (targetIds[rowMediaIds[j]]) {
@@ -1101,6 +1095,45 @@ function savePost(payload) {
           finalCaption = String(existingRow[8] || '');
         }
 
+        // Jika postingan terjadwal diubah jadwal/akunnya, cek kuota harian kembali
+        const oldTgl = String(existingRow[4] || '');
+        const oldJam = String(existingRow[5] || '');
+        const oldAkun = String(existingRow[13] || '');
+        const newTgl = String(payload.tanggal_rencana || '');
+        const newJam = String(payload.jam_tayang || '');
+        const targetAkun = String(payload.akun_id || oldAkun);
+
+        if (existingStatus === 'terjadwal' && (oldTgl !== newTgl || oldJam !== newJam || oldAkun !== targetAkun)) {
+          let limit = 3;
+          let accName = 'Akun';
+          const akunSheet = ss.getSheetByName('akun');
+          if (akunSheet && targetAkun) {
+            const aData = akunSheet.getDataRange().getValues();
+            for (let a = 1; a < aData.length; a++) {
+              if (String(aData[a][0]) === targetAkun) {
+                accName = String(aData[a][1] || 'Akun');
+                limit = parseInt(aData[a][4], 10) || 3;
+                break;
+              }
+            }
+          }
+
+          let count = 0;
+          for (let j = 1; j < data.length; j++) {
+            if (j + 1 === rowIndex) continue;
+            const st = String(data[j][9] || '');
+            const rowTgl = String(data[j][4] || '');
+            const rowAkunId = String(data[j][13] || '');
+            if ((st === 'terjadwal' || st === 'sudah tayang') && rowTgl.indexOf(newTgl) !== -1 && (!targetAkun || rowAkunId === targetAkun)) {
+              count++;
+            }
+          }
+
+          if (count >= limit) {
+            return { ok: false, success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + newTgl + ' sudah penuh (' + count + '/' + limit + ').' };
+          }
+        }
+
         sheet.getRange(rowIndex, 2, 1, 9).setValues([[
           payload.produk_id,
           mediaIdsJoined,
@@ -1203,54 +1236,64 @@ function updatePostStatus(postId, newStatus, extraData) {
     let finalStatus = newStatus;
     const nowStr = new Date().toISOString();
 
-    if (newStatus === 'setujui' || newStatus === 'terjadwalkan') {
-      const tgl = extraData && extraData.tanggal_rencana ? extraData.tanggal_rencana : String(postRow[4]);
-      const jam = extraData && extraData.jam_tayang ? extraData.jam_tayang : String(postRow[5]);
+    if (newStatus === 'terjadwal') {
+      const tgl = extraData && extraData.tanggal_rencana ? String(extraData.tanggal_rencana).trim() : String(postRow[4] || '').trim();
+      const jam = extraData && extraData.jam_tayang ? String(extraData.jam_tayang).trim() : String(postRow[5] || '').trim();
+      const postAkunId = extraData && extraData.akun_id ? String(extraData.akun_id).trim() : String(postRow[13] || '').trim();
 
-      if (!jam || jam.trim() === '') {
-        finalStatus = 'disetujui';
-      } else {
-        const postAkunId = String(postRow[13] || '');
-        let limit = 3;
-        const akunSheet = ss.getSheetByName('akun');
-        if (akunSheet && postAkunId) {
-          const aData = akunSheet.getDataRange().getValues();
-          for (let a = 1; a < aData.length; a++) {
-            if (String(aData[a][0]) === postAkunId) {
-              limit = parseInt(aData[a][4], 10) || 3;
-              break;
-            }
+      if (!tgl || !jam) {
+        return { ok: false, success: false, message: 'Tanggal dan jam tayang wajib diisi untuk menjadwalkan.' };
+      }
+      if (!String(postRow[7] || '').trim()) {
+        return { ok: false, success: false, message: 'Link affiliate wajib diisi sebelum menjadwalkan.' };
+      }
+      if (!String(postRow[8] || '').trim()) {
+        return { ok: false, success: false, message: 'Caption wajib diisi sebelum menjadwalkan.' };
+      }
+
+      let limit = 3;
+      let accName = 'Akun';
+      const akunSheet = ss.getSheetByName('akun');
+      if (akunSheet && postAkunId) {
+        const aData = akunSheet.getDataRange().getValues();
+        for (let a = 1; a < aData.length; a++) {
+          if (String(aData[a][0]) === postAkunId) {
+            accName = String(aData[a][1] || 'Akun');
+            limit = parseInt(aData[a][4], 10) || 3;
+            break;
           }
         }
+      }
 
-        let count = 0;
-        for (let j = 1; j < data.length; j++) {
-          if (j + 1 === rowIndex) continue;
-          const st = String(data[j][9] || '');
-          const rowTgl = String(data[j][4] || '');
-          const rowAkunId = String(data[j][13] || '');
-          if ((st === 'terjadwal' || st === 'sudah tayang') && rowTgl.indexOf(tgl) !== -1 && (!postAkunId || rowAkunId === postAkunId)) {
-            count++;
-          }
+      let count = 0;
+      for (let j = 1; j < data.length; j++) {
+        if (j + 1 === rowIndex) continue;
+        const st = String(data[j][9] || '');
+        const rowTgl = String(data[j][4] || '');
+        const rowAkunId = String(data[j][13] || '');
+        if ((st === 'terjadwal' || st === 'sudah tayang') && rowTgl.indexOf(tgl) !== -1 && (!postAkunId || rowAkunId === postAkunId)) {
+          count++;
         }
+      }
 
-        if (count >= limit) {
-          return { ok: false, success: false, message: 'Batas kuota postingan harian (' + limit + ') untuk tanggal ' + tgl + ' sudah penuh.' };
-        }
-        finalStatus = 'terjadwal';
+      if (count >= limit) {
+        return { ok: false, success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + tgl + ' sudah penuh (' + count + '/' + limit + ').' };
       }
 
       if (extraData && extraData.jam_tayang) sheet.getRange(rowIndex, 6).setValue(extraData.jam_tayang);
       if (extraData && extraData.tanggal_rencana) sheet.getRange(rowIndex, 5).setValue(extraData.tanggal_rencana);
-    } else if (newStatus === 'sudah_tayang') {
+      finalStatus = 'terjadwal';
+    } else if (newStatus === 'sudah tayang' || newStatus === 'sudah_tayang') {
       const fbUrl = extraData && extraData.url_postingan ? String(extraData.url_postingan).trim() : '';
       if (!fbUrl) {
         return { ok: false, success: false, message: 'URL postingan Facebook wajib diisi.' };
       }
       sheet.getRange(rowIndex, 11).setValue(fbUrl);
       finalStatus = 'sudah tayang';
-    } else if (newStatus === 'draf' || newStatus === 'tolak') {
+    } else if (newStatus === 'draf') {
       finalStatus = 'draf';
+    } else if (newStatus === 'diarsipkan') {
+      finalStatus = 'diarsipkan';
     }
 
     sheet.getRange(rowIndex, 10).setValue(finalStatus);
@@ -1268,23 +1311,37 @@ function archivePost(postId) {
   return updatePostStatus(postId, 'diarsipkan', {});
 }
 
-function getPostingSummaryPerDay(dateStr) {
+function getDailyQuotaUsage(akunId, tanggal) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName('postingan');
-    if (!sheet) return { ok: true, success: true, data: { count: 0, limit: 3, available: true } };
+    const postSheet = ss.getSheetByName('postingan');
+    const akunSheet = ss.getSheetByName('akun');
+    if (!akunSheet || !postSheet) {
+      return { ok: true, success: true, data: { count: 0, limit: 3, accountName: '', available: true } };
+    }
 
-    const data = sheet.getDataRange().getValues();
-    const settings = getSettingsInternal();
-    const limit = parseInt(settings.daily_post_limit, 10) || 3;
+    let limit = 3;
+    let accName = '';
+    const aData = akunSheet.getDataRange().getValues();
+    for (let a = 1; a < aData.length; a++) {
+      if (String(aData[a][0]) === String(akunId)) {
+        accName = String(aData[a][1] || '');
+        limit = parseInt(aData[a][4], 10) || 3;
+        break;
+      }
+    }
+
     let count = 0;
-    const cleanDate = String(dateStr || '').trim();
-
-    for (let i = 1; i < data.length; i++) {
-      const st = String(data[i][9] || '');
-      const tgl = String(data[i][4] || '');
-      if ((st === 'terjadwal' || st === 'sudah tayang') && tgl.indexOf(cleanDate) !== -1) {
-        count++;
+    const cleanDate = String(tanggal || '').trim();
+    if (cleanDate && akunId) {
+      const pData = postSheet.getDataRange().getValues();
+      for (let i = 1; i < pData.length; i++) {
+        const st = String(pData[i][9] || '');
+        const tgl = String(pData[i][4] || '');
+        const aid = String(pData[i][13] || '');
+        if ((st === 'terjadwal' || st === 'sudah tayang') && aid === String(akunId) && tgl.indexOf(cleanDate) !== -1) {
+          count++;
+        }
       }
     }
 
@@ -1294,8 +1351,47 @@ function getPostingSummaryPerDay(dateStr) {
       data: {
         count: count,
         limit: limit,
+        accountName: accName,
         available: count < limit
       }
+    };
+  } catch (err) {
+    return { ok: false, success: false, message: err.message };
+  }
+}
+
+function duplicatePost(postId) {
+  try {
+    const posts = getPostsInternal();
+    let target = null;
+    for (let i = 0; i < posts.length; i++) {
+      if (posts[i].id === postId) {
+        target = posts[i];
+        break;
+      }
+    }
+
+    if (!target) {
+      return { ok: false, success: false, message: 'Postingan tidak ditemukan.' };
+    }
+
+    return {
+      ok: true,
+      success: true,
+      message: 'Buat link affiliate baru untuk postingan ini.',
+      data: serializeForClient({
+        id: '',
+        akun_id: target.akun_id,
+        produk_id: target.produk_id,
+        tipe: target.tipe,
+        media_ids: target.media_ids,
+        caption: target.caption,
+        link_affiliate: '',
+        kode_pelacakan: '',
+        tanggal_rencana: '',
+        jam_tayang: '',
+        status: 'draf'
+      })
     };
   } catch (err) {
     return { ok: false, success: false, message: err.message };
