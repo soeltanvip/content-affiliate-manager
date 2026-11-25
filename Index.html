@@ -484,24 +484,35 @@
 
       <!-- FILTER & PENCARIAN -->
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-        <!-- Baris 1: Chip Cepat & Search (Debounce 300ms) -->
+        <!-- Baris 1: Filter Utama Chip Status & Pencarian -->
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <!-- Chip Cepat -->
+          <!-- Chip Status Utama (Terjadwal Default) -->
           <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg w-fit text-xs font-semibold">
-            <button type="button" @click="dateChip = 'all'; postPage = 1; fetchPosts()" :class="dateChip === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Semua</button>
-            <button type="button" @click="dateChip = 'today'; postPage = 1; fetchPosts()" :class="dateChip === 'today' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Hari ini</button>
-            <button type="button" @click="dateChip = 'this_week'; postPage = 1; fetchPosts()" :class="dateChip === 'this_week' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Minggu ini</button>
+            <button type="button" @click="statusChip = 'terjadwal'; postPage = 1; fetchPosts()" :class="statusChip === 'terjadwal' ? 'bg-white shadow text-indigo-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Terjadwal</button>
+            <button type="button" @click="statusChip = 'terbit'; postPage = 1; fetchPosts()" :class="statusChip === 'terbit' ? 'bg-white shadow text-emerald-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Terbit</button>
+            <button type="button" @click="statusChip = 'draf'; postPage = 1; fetchPosts()" :class="statusChip === 'draf' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Draf</button>
+            <button type="button" @click="statusChip = 'semua'; postPage = 1; fetchPosts()" :class="statusChip === 'semua' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Semua</button>
           </div>
 
-          <!-- Search -->
+          <!-- Search Bar -->
           <div class="relative flex-1 max-w-md">
             <span class="material-symbols-outlined absolute left-3 top-2 text-slate-400 text-sm">search</span>
             <input type="text" x-model="postSearchQuery" @input="onPostSearchChange()" placeholder="Cari kode pelacakan, caption, headline..." class="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-900">
           </div>
         </div>
 
-        <!-- Baris 2: Akun, Status & Tanggal (Server-side Filter) -->
+        <!-- Baris 2: Filter Waktu Kedua (Hari ini, Minggu ini, Rentang Tanggal) & Akun -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 text-xs">
+          <!-- Chip Filter Waktu -->
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Filter Waktu</label>
+            <div class="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg w-fit">
+              <button type="button" @click="dateChip = 'all'; postPage = 1; fetchPosts()" :class="dateChip === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-900'" class="px-2 py-1 rounded text-[11px] transition">Semua</button>
+              <button type="button" @click="dateChip = 'today'; postPage = 1; fetchPosts()" :class="dateChip === 'today' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-900'" class="px-2 py-1 rounded text-[11px] transition">Hari ini</button>
+              <button type="button" @click="dateChip = 'this_week'; postPage = 1; fetchPosts()" :class="dateChip === 'this_week' ? 'bg-white shadow text-slate-900' : 'text-slate-500 hover:text-slate-900'" class="px-2 py-1 rounded text-[11px] transition">Minggu ini</button>
+            </div>
+          </div>
+
           <!-- Filter Akun -->
           <div>
             <label class="block font-bold text-slate-600 mb-1">Filter Akun</label>
@@ -511,25 +522,6 @@
                 <option :value="acc.id" x-text="acc.nama_akun + ' (' + acc.prefix + ' - ' + acc.platform + ')'"></option>
               </template>
             </select>
-          </div>
-
-          <!-- Filter Status Multi-check -->
-          <div>
-            <label class="block font-bold text-slate-600 mb-1">Status</label>
-            <div class="flex items-center space-x-2 pt-1">
-              <label class="inline-flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" value="draf" x-model="filterStatuses" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
-                <span class="text-slate-700">Draf</span>
-              </label>
-              <label class="inline-flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" value="terjadwal" x-model="filterStatuses" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
-                <span class="text-slate-700">Terjadwal</span>
-              </label>
-              <label class="inline-flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" value="sudah tayang" x-model="filterStatuses" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
-                <span class="text-slate-700">Tayang</span>
-              </label>
-            </div>
           </div>
 
           <!-- Rentang Tanggal -->
@@ -627,12 +619,18 @@
                     <button x-show="p.status === 'terjadwal'" @click="openTayangModal(p)" class="p-1.5 hover:bg-emerald-50 rounded text-emerald-700" title="Tandai Sudah Tayang">
                       <span class="material-symbols-outlined text-base">check_circle</span>
                     </button>
-                    <!-- Tombol Ubah -->
-                    <button @click="editPost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Ubah Postingan">
+                    <!-- Tombol Buka Postingan Facebook (khusus terbit) -->
+                    <template x-if="isPostPublished(p)">
+                      <a :href="p.url_postingan" target="_blank" rel="noopener" class="p-1.5 hover:bg-blue-50 rounded text-blue-900" title="Buka Postingan Terbit">
+                        <span class="material-symbols-outlined text-base">open_in_new</span>
+                      </a>
+                    </template>
+                    <!-- Tombol Ubah (disembunyikan untuk konten terbit) -->
+                    <button x-show="!isPostPublished(p)" @click="editPost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Ubah Postingan">
                       <span class="material-symbols-outlined text-base">edit</span>
                     </button>
                     <!-- Tombol Duplikasi -->
-                    <button @click="confirmDuplicatePost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Duplikasi Postingan">
+                    <button @click="confirmDuplicatePost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Duplikasi Postingan (Buat Draf Baru)">
                       <span class="material-symbols-outlined text-base">content_copy</span>
                     </button>
                     <!-- Tombol Arsip -->
@@ -817,7 +815,8 @@
         <!-- Tombol Aksi Bawah Drawer -->
         <div class="p-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50" x-show="selectedDetailPost">
           <div class="flex items-center space-x-2">
-            <button type="button" @click="editPostFromDetail()" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
+            <!-- Tombol Ubah disembunyikan untuk postingan yang sudah terbit -->
+            <button type="button" x-show="!isPostPublished(selectedDetailPost)" @click="editPostFromDetail()" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
               <span class="material-symbols-outlined text-sm">edit</span>
               <span>Ubah</span>
             </button>
@@ -825,20 +824,26 @@
               <span class="material-symbols-outlined text-sm">content_copy</span>
               <span>Duplikasi</span>
             </button>
-            <button type="button" x-show="selectedDetailPost.status !== 'diarsipkan'" @click="confirmArchivePost(selectedDetailPost)" class="px-3 py-1.5 text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-lg flex items-center space-x-1">
+            <button type="button" x-show="selectedDetailPost.status !== 'diarsipkan' && !isPostPublished(selectedDetailPost)" @click="confirmArchivePost(selectedDetailPost)" class="px-3 py-1.5 text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-lg flex items-center space-x-1">
               <span class="material-symbols-outlined text-sm">archive</span>
               <span>Arsipkan</span>
             </button>
           </div>
 
           <div class="flex items-center space-x-2">
+            <template x-if="isPostPublished(selectedDetailPost)">
+              <a :href="selectedDetailPost.url_postingan" target="_blank" rel="noopener" class="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
+                <span class="material-symbols-outlined text-sm">open_in_new</span>
+                <span>Buka Postingan Terbit</span>
+              </a>
+            </template>
             <button type="button" x-show="selectedDetailPost.status === 'draf'" :disabled="!canSchedulePost(selectedDetailPost)" @click="jadwalkanPost(selectedDetailPost)" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
               <span class="material-symbols-outlined text-sm">event_upcoming</span>
               <span>Jadwalkan</span>
             </button>
             <button type="button" x-show="selectedDetailPost.status === 'terjadwal'" @click="openTayangModal(selectedDetailPost)" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
               <span class="material-symbols-outlined text-sm">check_circle</span>
-              <span>Tandai Tayang</span>
+              <span>Tandai Terbit</span>
             </button>
           </div>
         </div>
@@ -1137,14 +1142,15 @@
           </div>
         </div>
 
-        <!-- Tanggal dan Jam -->
-        <div class="grid grid-cols-2 gap-3">
+        <!-- Tanggal dan Jam (Jam disembunyikan untuk Draf) -->
+        <div class="grid gap-3" :class="postForm.status === 'terjadwal' ? 'grid-cols-2' : 'grid-cols-1'">
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Tanggal Rencana Tayang *</label>
             <input type="date" x-model="postForm.tanggal_rencana" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
           </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">Jam Tayang</label>
+          <!-- Jam hanya tampil jika status Terjadwal -->
+          <div x-show="postForm.status === 'terjadwal'">
+            <label class="block text-xs font-bold text-slate-700 mb-1">Jam Tayang (WIB) *</label>
             <input type="time" x-model="postForm.jam_tayang" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
           </div>
         </div>
@@ -1470,6 +1476,12 @@
           <input type="number" min="1" max="20" x-model.number="accountForm.batas_harian" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
         </div>
 
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Slot Jam Tayang Otomatis *</label>
+          <input type="text" x-model="accountForm.slot_jam" placeholder="Contoh: 08:00, 12:00, 19:00" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-white">
+          <span class="text-[11px] text-slate-400">Pisahkan dengan tanda koma (format 24 jam). Dipakai saat penjadwalan otomatis.</span>
+        </div>
+
         <div class="flex items-center space-x-2 pt-1">
           <input type="checkbox" id="accountAktifCheck" x-model="accountForm.aktif" class="rounded text-blue-900">
           <label for="accountAktifCheck" class="text-xs font-semibold text-slate-700">Akun Aktif</label>
@@ -1579,6 +1591,7 @@
           platform: 'Facebook Page',
           prefix: '',
           batas_harian: 3,
+          slot_jam: '08:00, 12:00, 19:00',
           aktif: true,
           has_posts: false
         },
@@ -1600,7 +1613,7 @@
         postTotal: 0,
         postTotalPages: 1,
         postDebounceTimer: null,
-        filterStatuses: ['draf', 'terjadwal', 'sudah tayang'],
+        statusChip: 'terjadwal',
         filterAccount: '',
         filterDateFrom: '',
         filterDateTo: '',
@@ -1684,9 +1697,15 @@
           var s = String(status).toLowerCase().trim();
           if (s === 'draf') return 'Draf';
           if (s === 'terjadwal') return 'Terjadwal';
-          if (s === 'sudah tayang' || s === 'sudah_tayang') return 'Sudah Tayang';
+          if (s === 'sudah tayang' || s === 'sudah_tayang' || s === 'terbit') return 'Terbit';
           if (s === 'diarsipkan') return 'Diarsipkan';
           return s.charAt(0).toUpperCase() + s.slice(1);
+        },
+
+        isPostPublished: function(p) {
+          if (!p) return false;
+          var st = String(p.status || '').toLowerCase().trim();
+          return (st === 'sudah tayang' || st === 'sudah_tayang' || st === 'terbit') && !!String(p.url_postingan || '').trim();
         },
 
         showToast: function(msg) {
@@ -2101,6 +2120,7 @@
             platform: 'Facebook Page',
             prefix: '',
             batas_harian: 3,
+            slot_jam: '08:00, 12:00, 19:00',
             aktif: true,
             has_posts: false
           };
@@ -2114,6 +2134,7 @@
             platform: acc.platform,
             prefix: acc.prefix,
             batas_harian: acc.batas_harian || 3,
+            slot_jam: acc.slot_jam || '08:00, 12:00, 19:00',
             aktif: acc.aktif,
             has_posts: acc.has_posts
           };
@@ -2272,7 +2293,7 @@
               page: this.postPage,
               pageSize: 25,
               q: this.postSearchQuery,
-              status: this.filterStatuses,
+              statusChip: this.statusChip,
               akun_id: this.filterAccount,
               dateFrom: this.filterDateFrom,
               dateTo: this.filterDateTo,
@@ -2453,7 +2474,7 @@
             tipe: 'TEKS',
             media_ids: [],
             tanggal_rencana: new Date().toISOString().substring(0, 10),
-            jam_tayang: '10:00',
+            jam_tayang: '',
             kode_pelacakan: '',
             link_affiliate: '',
             caption: '',
@@ -2472,6 +2493,11 @@
         },
 
         editPost: function(post) {
+          if (this.isPostPublished(post)) {
+            this.showToast('Postingan yang sudah terbit bersifat hanya-baca.');
+            this.openPostDetail(post);
+            return;
+          }
           var accId = post.akun_id || (this.accounts.length > 0 ? this.accounts[0].id : '');
           this.currentSelectedAccountId = accId;
           this.postForm = {
@@ -2481,7 +2507,7 @@
             tipe: post.tipe || 'TEKS',
             media_ids: Array.isArray(post.media_ids) ? post.media_ids.slice() : [],
             tanggal_rencana: post.tanggal_rencana || '',
-            jam_tayang: post.jam_tayang || '',
+            jam_tayang: post.status === 'terjadwal' ? (post.jam_tayang || '') : '',
             kode_pelacakan: post.kode_pelacakan || '',
             link_affiliate: post.link_affiliate || '',
             caption: post.caption || '',
@@ -2658,7 +2684,7 @@
         canSchedulePost: function(p) {
           if (!p) return false;
           if (!p.akun_id) return false;
-          if (!p.produk_id || !p.tanggal_rencana || !p.jam_tayang) return false;
+          if (!p.produk_id || !p.tanggal_rencana) return false;
           if (!p.caption || !p.caption.trim()) return false;
           if (!p.link_affiliate || !p.link_affiliate.trim()) return false;
           if (p.tipe === 'VIDEO' && (!p.media_ids || p.media_ids.length !== 1)) return false;
@@ -2673,9 +2699,54 @@
             return;
           }
           if (!this.canSchedulePost(post)) {
-            this.showToast('Lengkapi produk, media, tanggal, jam, caption, dan link affiliate.');
+            this.showToast('Lengkapi produk, media, tanggal rencana, caption, dan link affiliate.');
             return;
           }
+
+          // Jika jam tayang masih kosong, panggil server untuk mencari slot otomatis
+          if (!post.jam_tayang || !String(post.jam_tayang).trim()) {
+            this.showToast('Mencari slot jam tayang otomatis...');
+            google.script.run
+              .withSuccessHandler(function(slotRes) {
+                if (slotRes && slotRes.success && slotRes.data) {
+                  var chosenDate = slotRes.data.tanggal_rencana;
+                  var chosenJam = slotRes.data.jam_tayang;
+                  var accName = slotRes.data.account_name || 'Akun';
+
+                  self.confirmDialog = {
+                    open: true,
+                    title: 'Konfirmasi Jadwal Otomatis',
+                    buttonText: 'Jadwalkan',
+                    message: 'Slot jadwal tayang yang dipilih untuk ' + accName + ' adalah tanggal ' + chosenDate + ' jam ' + chosenJam + ' WIB. Lanjutkan?',
+                    action: function() {
+                      self.executeSchedule(post.id, chosenDate, chosenJam, post.akun_id);
+                    }
+                  };
+                } else {
+                  self.showToast('Gagal: ' + (slotRes ? slotRes.message : 'Slot tidak tersedia.'));
+                }
+              })
+              .withFailureHandler(function(err) {
+                self.showToast('Galat server: ' + err.message);
+              })
+              .findAvailableScheduleSlot(post.akun_id, post.tanggal_rencana);
+            return;
+          }
+
+          // Jika jam sudah ada, konfirmasi sebelum menyimpan
+          this.confirmDialog = {
+            open: true,
+            title: 'Jadwalkan Konten?',
+            buttonText: 'Jadwalkan',
+            message: 'Postingan akan dijadwalkan pada ' + post.tanggal_rencana + ' jam ' + post.jam_tayang + ' WIB.',
+            action: function() {
+              self.executeSchedule(post.id, post.tanggal_rencana, post.jam_tayang, post.akun_id);
+            }
+          };
+        },
+
+        executeSchedule: function(postId, tanggal, jam, akunId) {
+          var self = this;
           google.script.run
             .withSuccessHandler(function(res) {
               if (res && res.success) {
@@ -2688,10 +2759,10 @@
             .withFailureHandler(function(err) {
               self.showToast('Galat: ' + err.message);
             })
-            .updatePostStatus(post.id, 'terjadwal', {
-              tanggal_rencana: post.tanggal_rencana,
-              jam_tayang: post.jam_tayang,
-              akun_id: post.akun_id
+            .updatePostStatus(postId, 'terjadwal', {
+              tanggal_rencana: tanggal,
+              jam_tayang: jam,
+              akun_id: akunId
             });
         },
 
@@ -2715,6 +2786,10 @@
 
         editPostFromDetail: function() {
           if (this.selectedDetailPost) {
+            if (this.isPostPublished(this.selectedDetailPost)) {
+              this.showToast('Postingan yang sudah terbit bersifat hanya-baca.');
+              return;
+            }
             this.detailDrawerOpen = false;
             this.editPost(this.selectedDetailPost);
           }
