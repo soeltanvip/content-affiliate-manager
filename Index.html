@@ -264,7 +264,7 @@
                     <span class="material-symbols-outlined text-sm">content_copy</span>
                     <span>Salin Semua URL</span>
                   </button>
-                  <button @click="confirmDeleteBatch(batch.batch_id)" class="text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded flex items-center space-x-1">
+                  <button @click="confirmDeleteBatch(batch)" class="text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded flex items-center space-x-1">
                     <span class="material-symbols-outlined text-sm">delete</span>
                     <span>Hapus Batch</span>
                   </button>
@@ -475,7 +475,12 @@
                 </td>
                 <td class="p-3">
                   <div class="font-semibold text-slate-900 line-clamp-1" x-text="p.produk_nama"></div>
-                  <div class="text-[10px] text-slate-400 font-medium" x-text="p.akun_nama ? p.akun_nama + ' (' + p.akun_prefix + ')' : '-'"></div>
+                  <template x-if="p.akun_id && p.akun_nama">
+                    <div class="text-[10px] text-slate-400 font-medium" x-text="p.akun_nama + ' (' + p.akun_prefix + ')'"></div>
+                  </template>
+                  <template x-if="!p.akun_id">
+                    <span class="inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">Akun belum dipilih</span>
+                  </template>
                 </td>
                 <td class="p-3">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700" x-text="p.tipe"></span>
@@ -1159,6 +1164,25 @@
         </button>
       </div>
 
+      <!-- Tombol Buka Dashboard Shopee -->
+      <div class="mb-4">
+        <template x-if="currentPostProduct && currentPostProduct.link_dashboard">
+          <a :href="currentPostProduct.link_dashboard" target="_blank" rel="noopener" class="w-full inline-flex items-center justify-center space-x-1.5 bg-blue-50 hover:bg-blue-100 text-blue-950 border border-blue-200 px-3 py-2 rounded-lg text-xs font-semibold transition">
+            <span class="material-symbols-outlined text-sm">open_in_new</span>
+            <span>Buka Dashboard Shopee</span>
+          </a>
+        </template>
+        <template x-if="!currentPostProduct || !currentPostProduct.link_dashboard">
+          <div>
+            <button type="button" disabled class="w-full inline-flex items-center justify-center space-x-1.5 bg-slate-100 text-slate-400 border border-slate-200 px-3 py-2 rounded-lg text-xs font-semibold cursor-not-allowed">
+              <span class="material-symbols-outlined text-sm">open_in_new</span>
+              <span>Buka Dashboard Shopee</span>
+            </button>
+            <span class="block text-[11px] text-amber-700 mt-1">Link dashboard belum diisi di produk ini</span>
+          </div>
+        </template>
+      </div>
+
       <div class="space-y-3">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Link Affiliate dari Dashboard Shopee</label>
@@ -1451,14 +1475,14 @@
           google.script.run
             .withSuccessHandler(function(response) {
               self.isLoading = false;
-              if (response && response.ok && response.data) {
+              if (response && response.success && response.data) {
                 self.products = response.data.products || [];
                 self.posts = response.data.posts || [];
                 self.accounts = response.data.accounts || [];
                 self.settings = Object.assign(self.settings, response.data.settings || {});
                 self.extractCategories();
               } else {
-                self.showToast('Gagal memuat data: ' + (response.message || 'Terjadi galat'));
+                self.showToast('Gagal memuat data: ' + (response ? response.message : 'Terjadi galat'));
               }
             })
             .withFailureHandler(function(err) {
@@ -1519,7 +1543,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isSavingProduct = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.productModalOpen = false;
                 self.showToast('Produk berhasil disimpan!');
                 self.loadInitialData();
@@ -1551,7 +1575,7 @@
           var self = this;
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.showToast('Produk berhasil dihapus!');
                 self.loadInitialData();
               } else {
@@ -1574,7 +1598,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isLoadingMedia = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.groupMediaByBatch(res.data || []);
               }
             })
@@ -1635,7 +1659,7 @@
           var batchInfo = await new Promise(function(resolve) {
             google.script.run
               .withSuccessHandler(function(res) {
-                if (res && res.ok && res.data) {
+                if (res && res.success && res.data) {
                   resolve(res.data);
                 } else {
                   var d = new Date();
@@ -1707,7 +1731,7 @@
               .withSuccessHandler(function(saveRes) {
                 self.isUploadingMedia = false;
                 self.batchModalOpen = false;
-                if (saveRes && saveRes.ok) {
+                if (saveRes && saveRes.success) {
                   self.showToast('Sukses mengunggah ' + uploadedMediaList.length + ' aset media!');
                   self.loadProductMedia(self.selectedProduct.id);
                   self.loadInitialData(); // perbarui hitungan media produk
@@ -1741,7 +1765,7 @@
             action: function() {
               google.script.run
                 .withSuccessHandler(function(res) {
-                  if (res && res.ok) {
+                  if (res && res.success) {
                     self.showToast(res.message || 'Media berhasil dihapus.');
                     self.loadProductMedia(self.selectedProduct.id);
                     self.loadInitialData();
@@ -1757,17 +1781,18 @@
           };
         },
 
-        confirmDeleteBatch: function(batchId) {
+        confirmDeleteBatch: function(batch) {
           var self = this;
+          var itemCount = (batch.items && batch.items.length) || 0;
           this.confirmDialog = {
             open: true,
             title: 'Hapus Seluruh Batch?',
             buttonText: 'Hapus Permanen',
-            message: 'Semua berkas media dalam batch ini akan dihapus permanen dari Cloudinary dan database. Tindakan ini tidak dapat dibatalkan.',
+            message: 'Sebanyak ' + itemCount + ' berkas media dalam batch "' + batch.batch_nama + '" akan dihapus permanen dari Cloudinary dan database. Tindakan ini tidak dapat dibatalkan.',
             action: function() {
               google.script.run
                 .withSuccessHandler(function(res) {
-                  if (res && res.ok) {
+                  if (res && res.success) {
                     self.showToast(res.message || 'Batch media berhasil dihapus.');
                     self.loadProductMedia(self.selectedProduct.id);
                     self.loadInitialData();
@@ -1778,7 +1803,7 @@
                 .withFailureHandler(function(err) {
                   self.showToast('Galat server: ' + err.message);
                 })
-                .deleteBatch(batchId);
+                .deleteMediaBatch(batch.batch_id);
             }
           };
         },
@@ -1816,7 +1841,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isSavingAccount = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.accountModalOpen = false;
                 self.showToast(res.message);
                 self.refreshAccounts();
@@ -1836,7 +1861,7 @@
           var newStatus = !acc.aktif;
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.showToast('Status akun ' + acc.nama_akun + ' diperbarui.');
                 self.refreshAccounts();
               } else {
@@ -1850,7 +1875,7 @@
           var self = this;
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.accounts = res.data || [];
               }
             })
@@ -1864,7 +1889,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isSavingSettings = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.showToast('Pengaturan berhasil disimpan!');
                 if (self.settings.cloudinary_api_secret) {
                   self.settings.has_api_secret = true;
@@ -1976,6 +2001,11 @@
             if (b.status === 'terjadwal') return 1;
             return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '');
           });
+        },
+
+        get currentPostProduct() {
+          var self = this;
+          return this.products.find(function(p) { return p.id === self.postForm.produk_id; }) || null;
         },
 
         get selectableAccounts() {
@@ -2160,11 +2190,11 @@
             google.script.run
               .withSuccessHandler(function(res) {
                 self.isLoadingTrackingCode = false;
-                if (res && res.ok && res.data && res.data.code) {
+                if (res && res.success && res.data && res.data.code) {
                   self.postForm.kode_pelacakan = res.data.code;
                   self.affiliateLinkModalOpen = true;
                 } else {
-                  self.showToast('Gagal membuat kode: ' + (res.message || 'Terjadi kesalahan'));
+                  self.showToast('Gagal membuat kode: ' + (res ? res.message : 'Terjadi kesalahan'));
                 }
               })
               .withFailureHandler(function(err) {
@@ -2197,7 +2227,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isLoadingPostMedia = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.postMediaOptions = res.data || [];
               }
             })
@@ -2245,7 +2275,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isSavingPost = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.postModalOpen = false;
                 self.showToast(res.message);
                 self.refreshPosts();
@@ -2264,7 +2294,7 @@
           var self = this;
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.posts = res.data || [];
                 if (self.selectedDetailPost) {
                   var updated = self.posts.find(function(p) { return p.id === self.selectedDetailPost.id; });
@@ -2277,6 +2307,7 @@
 
         canSchedulePost: function(p) {
           if (!p) return false;
+          if (!p.akun_id) return false;
           if (!p.produk_id || !p.tanggal_rencana || !p.jam_tayang) return false;
           if (!p.caption || !p.caption.trim()) return false;
           if (!p.link_affiliate || !p.link_affiliate.trim()) return false;
@@ -2287,13 +2318,17 @@
 
         jadwalkanPost: function(post) {
           var self = this;
+          if (!post.akun_id) {
+            this.showToast('Pilih akun terlebih dahulu sebelum menjadwalkan.');
+            return;
+          }
           if (!this.canSchedulePost(post)) {
             this.showToast('Lengkapi produk, media, tanggal, jam, caption, dan link affiliate.');
             return;
           }
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.showToast('Postingan berhasil dijadwalkan!');
                 self.refreshPosts();
               } else {
@@ -2319,7 +2354,7 @@
           // Muat detail media dari produk terkait
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok && res.data) {
+              if (res && res.success && res.data) {
                 var targetIds = {};
                 (post.media_ids || []).forEach(function(id) { targetIds[id] = true; });
                 self.detailMediaList = res.data.filter(function(m) { return targetIds[m.id]; });
@@ -2352,7 +2387,7 @@
           var self = this;
           google.script.run
             .withSuccessHandler(function(res) {
-              if (res && res.ok && res.data) {
+              if (res && res.success && res.data) {
                 self.detailDrawerOpen = false;
                 self.postForm = res.data;
                 var prod = self.products.find(function(p) { return p.id === res.data.produk_id; });
@@ -2381,7 +2416,7 @@
             action: function() {
               google.script.run
                 .withSuccessHandler(function(res) {
-                  if (res && res.ok) {
+                  if (res && res.success) {
                     self.showToast('Postingan diarsipkan.');
                     self.refreshPosts();
                   }
@@ -2403,7 +2438,7 @@
           google.script.run
             .withSuccessHandler(function(res) {
               self.isSavingTayang = false;
-              if (res && res.ok) {
+              if (res && res.success) {
                 self.tayangModalOpen = false;
                 self.showToast('Postingan ditandai sudah tayang!');
                 self.refreshPosts();

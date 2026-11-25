@@ -45,8 +45,35 @@ function setupDatabase() {
 
   // Migrasi pengaturan prefix & kuota lama ke akun tunggal pertama
   migrateSettingsToAccount(ss);
+  // Migrasi akun_id pada postingan lama jika hanya ada satu akun
+  migratePostsAccount(ss);
 
-  return { ok: true, success: true, message: 'Database setup completed.' };
+  return { success: true, message: 'Database setup completed.' };
+}
+
+// Migrasi jika postingan belum memiliki akun_id dan hanya ada 1 akun terdaftar
+function migratePostsAccount(ss) {
+  const akunSheet = ss.getSheetByName('akun');
+  const postSheet = ss.getSheetByName('postingan');
+  if (!akunSheet || !postSheet) return;
+
+  const akunData = akunSheet.getDataRange().getValues();
+  const accounts = [];
+  for (let a = 1; a < akunData.length; a++) {
+    const aid = String(akunData[a][0] || '').trim();
+    if (aid) accounts.push(aid);
+  }
+
+  if (accounts.length === 1) {
+    const singleAccId = accounts[0];
+    const postData = postSheet.getDataRange().getValues();
+    for (let p = 1; p < postData.length; p++) {
+      const currentAcc = String(postData[p][13] || '').trim();
+      if (!currentAcc) {
+        postSheet.getRange(p + 1, 14).setValue(singleAccId);
+      }
+    }
+  }
 }
 
 // Migrasi jika sheet akun kosong dan sheet pengaturan menyimpan tracking_prefix / limit
@@ -116,6 +143,75 @@ function serializeForClient(value) {
   return value;
 }
 
+// Manajemen Cache Daftar Produk (Masa berlaku 300 detik)
+const PRODUCT_CACHE_KEY = 'products_v1';
+const PRODUCT_CACHE_TTL = 300;
+
+function getCachedProducts() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const countStr = cache.get(PRODUCT_CACHE_KEY + '_chunks');
+    if (countStr) {
+      const count = parseInt(countStr, 10);
+      let jsonStr = '';
+      for (let i = 0; i < count; i++) {
+        const chunk = cache.get(PRODUCT_CACHE_KEY + '_' + i);
+        if (chunk === null) return null;
+        jsonStr += chunk;
+      }
+      return JSON.parse(jsonStr);
+    }
+    const single = cache.get(PRODUCT_CACHE_KEY);
+    if (single) {
+      return JSON.parse(single);
+    }
+  } catch (e) {
+    // Abaikan jika cache rusak atau kosong
+  }
+  return null;
+}
+
+function setCachedProducts(products) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const jsonStr = JSON.stringify(products);
+    const CHUNK_SIZE = 90000;
+    if (jsonStr.length > CHUNK_SIZE) {
+      const chunks = [];
+      for (let i = 0; i < jsonStr.length; i += CHUNK_SIZE) {
+        chunks.push(jsonStr.substring(i, i + CHUNK_SIZE));
+      }
+      const cacheObj = {};
+      cacheObj[PRODUCT_CACHE_KEY + '_chunks'] = String(chunks.length);
+      for (let j = 0; j < chunks.length; j++) {
+        cacheObj[PRODUCT_CACHE_KEY + '_' + j] = chunks[j];
+      }
+      cache.putAll(cacheObj, PRODUCT_CACHE_TTL);
+    } else {
+      cache.put(PRODUCT_CACHE_KEY, jsonStr, PRODUCT_CACHE_TTL);
+    }
+  } catch (e) {
+    // Abaikan kegagalan tulis cache
+  }
+}
+
+function invalidateProductCache() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const countStr = cache.get(PRODUCT_CACHE_KEY + '_chunks');
+    const keysToRemove = [PRODUCT_CACHE_KEY, PRODUCT_CACHE_KEY + '_chunks'];
+    if (countStr) {
+      const count = parseInt(countStr, 10);
+      for (let i = 0; i < count; i++) {
+        keysToRemove.push(PRODUCT_CACHE_KEY + '_' + i);
+      }
+    }
+    cache.removeAll(keysToRemove);
+  } catch (e) {
+    // Abaikan kegagalan bersihkan cache
+  }
+}
+
 // Endpoint pemuatan data awal
 function getInitialData() {
   try {
@@ -125,7 +221,6 @@ function getInitialData() {
     const posts = getPostsInternal();
     const accounts = getAccountsInternal();
     return {
-      ok: true,
       success: true,
       data: serializeForClient({
         settings: settings,
@@ -135,12 +230,17 @@ function getInitialData() {
       })
     };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal memuat data awal: ' + err.message };
+    return { success: false, message: 'Gagal memuat data awal: ' + err.message };
   }
 }
 
-// Ambil daftar produk beserta hitungan aset media
+// Ambil daftar produk beserta hitungan aset media (didukung cache)
 function getProductsInternal() {
+  const cached = getCachedProducts();
+  if (cached && Array.isArray(cached)) {
+    return cached;
+  }
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const prodSheet = ss.getSheetByName('produk');
   const mediaSheet = ss.getSheetByName('media');
@@ -173,14 +273,16 @@ function getProductsInternal() {
       media_count: mediaCountMap[pid] || 0
     });
   }
+
+  setCachedProducts(products);
   return products;
 }
 
 function getProducts() {
   try {
-    return { ok: true, success: true, data: serializeForClient(getProductsInternal()) };
+    return { success: true, data: serializeForClient(getProductsInternal()) };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -213,7 +315,8 @@ function saveProduct(payload) {
           payload.cover_url || '',
           payload.link_dashboard || ''
         ]]);
-        return { ok: true, success: true, message: 'Produk berhasil diubah.' };
+        invalidateProductCache();
+        return { success: true, message: 'Produk berhasil diubah.' };
       }
     }
 
@@ -229,9 +332,10 @@ function saveProduct(payload) {
       nowStr
     ]);
 
-    return { ok: true, success: true, data: { id: newId }, message: 'Produk berhasil ditambahkan.' };
+    invalidateProductCache();
+    return { success: true, data: { id: newId }, message: 'Produk berhasil ditambahkan.' };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal menyimpan: ' + err.message };
+    return { success: false, message: 'Gagal menyimpan: ' + err.message };
   } finally {
     lock.releaseLock();
   }
@@ -265,9 +369,10 @@ function deleteProduct(productId) {
       }
     }
 
-    return { ok: true, success: true, message: 'Produk berhasil dihapus.' };
+    invalidateProductCache();
+    return { success: true, message: 'Produk berhasil dihapus.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -278,7 +383,7 @@ function getMediaByProduct(productId) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('media');
-    if (!sheet) return { ok: true, success: true, data: [] };
+    if (!sheet) return { success: true, data: [] };
 
     const data = sheet.getDataRange().getValues();
     const mediaList = [];
@@ -299,9 +404,9 @@ function getMediaByProduct(productId) {
         });
       }
     }
-    return { ok: true, success: true, data: serializeForClient(mediaList) };
+    return { success: true, data: serializeForClient(mediaList) };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -311,7 +416,7 @@ function saveMediaBatch(batchPayload) {
   try {
     lock.waitLock(10000);
     if (!batchPayload || !batchPayload.length) {
-      return { ok: true, success: true, message: 'Tidak ada data untuk disimpan.' };
+      return { success: true, message: 'Tidak ada data untuk disimpan.' };
     }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -341,9 +446,10 @@ function saveMediaBatch(batchPayload) {
     const startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, rowsToAppend.length, 11).setValues(rowsToAppend);
 
-    return { ok: true, success: true, message: 'Batch media tersimpan.' };
+    invalidateProductCache();
+    return { success: true, message: 'Batch media tersimpan.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -388,7 +494,6 @@ function getNextBatchSequence(dateStr) {
     const nextSeq = maxSeq + 1;
     const seqStr = nextSeq < 10 ? '0' + nextSeq : String(nextSeq);
     return {
-      ok: true,
       success: true,
       data: {
         batchSeq: seqStr,
@@ -396,7 +501,7 @@ function getNextBatchSequence(dateStr) {
       }
     };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal mengambil nomor batch: ' + err.message };
+    return { success: false, message: 'Gagal mengambil nomor batch: ' + err.message };
   }
 }
 
@@ -470,39 +575,50 @@ function deleteFromCloudinary(publicId, resourceType) {
   throw new Error('Cloudinary: ' + (json.error ? json.error.message : resText));
 }
 
-// Cek apakah media sedang digunakan di postingan yang akan tayang
+// Cek apakah media sedang digunakan di postingan yang akan tayang (kembalikan daftar kode pelacakan)
 function checkMediaUsageInActivePosts(ss, mediaIdsToCheck) {
   const postSheet = ss.getSheetByName('postingan');
-  if (!postSheet) return false;
+  if (!postSheet) return [];
   const data = postSheet.getDataRange().getValues();
   const targetIds = {};
   mediaIdsToCheck.forEach(function(id) { targetIds[id] = true; });
 
+  const activeStatuses = {
+    'terjadwal': true,
+    'menunggu persetujuan': true,
+    'disetujui': true
+  };
+
+  const usedCodes = [];
   for (let i = 1; i < data.length; i++) {
     const status = String(data[i][9] || '').toLowerCase().trim();
-    if (status === 'terjadwal') {
+    if (activeStatuses[status]) {
       const rowMediaIds = String(data[i][2] || '').split(',').map(function(s) { return s.trim(); });
       for (let j = 0; j < rowMediaIds.length; j++) {
         if (targetIds[rowMediaIds[j]]) {
-          return true;
+          const code = String(data[i][6] || ('Baris ' + (i + 1)));
+          if (usedCodes.indexOf(code) === -1) {
+            usedCodes.push(code);
+          }
         }
       }
     }
   }
-  return false;
+  return usedCodes;
 }
 
-// Hapus satuan media dari Cloudinary lalu hapus baris sheet
+// Hapus satuan media dari Cloudinary lalu hapus baris sheet hanya jika berhasil
 function deleteMedia(mediaId) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('media');
-    if (!sheet) return { ok: false, success: false, message: 'Sheet media tidak ditemukan.' };
+    if (!sheet) return { success: false, message: 'Sheet media tidak ditemukan.' };
 
-    if (checkMediaUsageInActivePosts(ss, [mediaId])) {
-      return { ok: false, success: false, message: 'Media ini dipakai postingan yang akan tayang.' };
+    const usedPosts = checkMediaUsageInActivePosts(ss, [mediaId]);
+    if (usedPosts.length > 0) {
+      return { success: false, message: 'Media ini dipakai postingan ' + usedPosts.join(', ') + ' yang akan tayang.' };
     }
 
     const data = sheet.getDataRange().getValues();
@@ -518,7 +634,7 @@ function deleteMedia(mediaId) {
     }
 
     if (rowIndex === -1) {
-      return { ok: false, success: false, message: 'Media tidak ditemukan.' };
+      return { success: false, message: 'Media tidak ditemukan.' };
     }
 
     let pubId = String(targetRow[9] || '');
@@ -532,31 +648,34 @@ function deleteMedia(mediaId) {
     }
 
     sheet.deleteRow(rowIndex);
-    return { ok: true, success: true, message: 'Media berhasil dihapus permanen dari Cloudinary dan database.' };
+    invalidateProductCache();
+    return { success: true, message: 'Media berhasil dihapus permanen dari Cloudinary dan database.' };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal menghapus media: ' + err.message };
+    return { success: false, message: 'Gagal menghapus media: ' + err.message };
   } finally {
     lock.releaseLock();
   }
 }
 
-// Hapus seluruh batch media dari Cloudinary lalu hapus baris sheet
-function deleteBatch(batchId) {
+// Hapus seluruh batch media dari Cloudinary lalu hapus baris sheet per berkas yang berhasil
+function deleteMediaBatch(batchId) {
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(15000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('media');
-    if (!sheet) return { ok: false, success: false, message: 'Sheet media tidak ditemukan.' };
+    if (!sheet) return { success: false, message: 'Sheet media tidak ditemukan.' };
 
     const data = sheet.getDataRange().getValues();
     const batchMediaIds = [];
-    const rowsToDelete = [];
+    const itemsToDelete = [];
 
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][2]) === String(batchId)) {
-        batchMediaIds.push(String(data[i][0]));
-        rowsToDelete.push({
+        const mid = String(data[i][0]);
+        batchMediaIds.push(mid);
+        itemsToDelete.push({
+          id: mid,
           rowIndex: i + 1,
           pubId: String(data[i][9] || '') || extractPublicIdFromUrl(String(data[i][4] || '')),
           resType: String(data[i][10] || (String(data[i][5] || '').toUpperCase() === 'VIDEO' ? 'video' : 'image'))
@@ -564,30 +683,53 @@ function deleteBatch(batchId) {
       }
     }
 
-    if (rowsToDelete.length === 0) {
-      return { ok: true, success: true, message: 'Batch tidak ditemukan atau sudah kosong.' };
+    if (itemsToDelete.length === 0) {
+      return { success: true, message: 'Batch tidak ditemukan atau sudah kosong.' };
     }
 
-    if (checkMediaUsageInActivePosts(ss, batchMediaIds)) {
-      return { ok: false, success: false, message: 'Media ini dipakai postingan yang akan tayang.' };
+    const usedPosts = checkMediaUsageInActivePosts(ss, batchMediaIds);
+    if (usedPosts.length > 0) {
+      return { success: false, message: 'Batch tidak bisa dihapus karena media di dalamnya dipakai postingan ' + usedPosts.join(', ') + ' yang akan tayang.' };
     }
+
+    const failedFiles = [];
+    const successfullyDeletedRowIndices = [];
 
     // Hapus satu per satu dari Cloudinary
-    for (let k = 0; k < rowsToDelete.length; k++) {
-      const item = rowsToDelete[k];
+    for (let k = 0; k < itemsToDelete.length; k++) {
+      const item = itemsToDelete[k];
       if (item.pubId) {
-        deleteFromCloudinary(item.pubId, item.resType);
+        try {
+          deleteFromCloudinary(item.pubId, item.resType);
+          successfullyDeletedRowIndices.push(item.rowIndex);
+        } catch (err) {
+          failedFiles.push(item.pubId + ' (' + err.message + ')');
+        }
+      } else {
+        successfullyDeletedRowIndices.push(item.rowIndex);
       }
     }
 
     // Hapus dari sheet mulai dari baris terbawah
-    for (let j = rowsToDelete.length - 1; j >= 0; j--) {
-      sheet.deleteRow(rowsToDelete[j].rowIndex);
+    successfullyDeletedRowIndices.sort(function(a, b) { return b - a; });
+    for (let j = 0; j < successfullyDeletedRowIndices.length; j++) {
+      sheet.deleteRow(successfullyDeletedRowIndices[j]);
     }
 
-    return { ok: true, success: true, message: 'Batch media berhasil dihapus permanen dari Cloudinary dan database.' };
+    if (successfullyDeletedRowIndices.length > 0) {
+      invalidateProductCache();
+    }
+
+    if (failedFiles.length > 0) {
+      return {
+        success: false,
+        message: 'Beberapa berkas gagal dihapus dari Cloudinary: ' + failedFiles.join(', ') + '. Baris berkas yang gagal tetap disimpan di database.'
+      };
+    }
+
+    return { success: true, message: 'Batch media (' + successfullyDeletedRowIndices.length + ' berkas) berhasil dihapus permanen dari Cloudinary dan database.' };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal menghapus batch: ' + err.message };
+    return { success: false, message: 'Gagal menghapus batch: ' + err.message };
   } finally {
     lock.releaseLock();
   }
@@ -625,9 +767,9 @@ function getSettingsInternal() {
 
 function getSettings() {
   try {
-    return { ok: true, success: true, data: serializeForClient(getSettingsInternal()) };
+    return { success: true, data: serializeForClient(getSettingsInternal()) };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -665,9 +807,9 @@ function saveSettings(payload) {
       sheet.getRange(2, 1, rows.length, 2).setValues(rows);
     }
 
-    return { ok: true, success: true, message: 'Pengaturan berhasil disimpan.' };
+    return { success: true, message: 'Pengaturan berhasil disimpan.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -720,9 +862,9 @@ function getAccountsInternal() {
 
 function getAccounts() {
   try {
-    return { ok: true, success: true, data: serializeForClient(getAccountsInternal()) };
+    return { success: true, data: serializeForClient(getAccountsInternal()) };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -743,7 +885,7 @@ function saveAccount(payload) {
 
     let cleanPrefix = String(payload.prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!cleanPrefix) {
-      return { ok: false, success: false, message: 'Prefix tracking wajib berupa huruf/angka.' };
+      return { success: false, message: 'Prefix tracking wajib berupa huruf/angka.' };
     }
     if (cleanPrefix.length > 4) {
       cleanPrefix = cleanPrefix.substring(0, 4);
@@ -754,7 +896,7 @@ function saveAccount(payload) {
       const rowId = String(data[i][0]);
       const rowPrefix = String(data[i][3] || '').toUpperCase();
       if ((!isEdit || rowId !== payload.id) && rowPrefix === cleanPrefix) {
-        return { ok: false, success: false, message: 'Prefix ' + cleanPrefix + ' sudah digunakan akun lain.' };
+        return { success: false, message: 'Prefix ' + cleanPrefix + ' sudah digunakan akun lain.' };
       }
     }
 
@@ -784,7 +926,7 @@ function saveAccount(payload) {
 
         const existingPrefix = String(existingRow[3] || '').toUpperCase();
         if (hasPosts && existingPrefix !== cleanPrefix) {
-          return { ok: false, success: false, message: 'Prefix tidak bisa diubah karena sudah ada postingan yang memakai akun ini.' };
+          return { success: false, message: 'Prefix tidak bisa diubah karena sudah ada postingan yang memakai akun ini.' };
         }
 
         const aktifVal = payload.aktif !== false && String(payload.aktif) !== 'false';
@@ -796,7 +938,7 @@ function saveAccount(payload) {
           aktifVal
         ]]);
 
-        return { ok: true, success: true, message: 'Akun berhasil diperbarui.' };
+        return { success: true, message: 'Akun berhasil diperbarui.' };
       }
     }
 
@@ -812,9 +954,9 @@ function saveAccount(payload) {
       nowStr
     ]);
 
-    return { ok: true, success: true, message: 'Akun berhasil ditambahkan.' };
+    return { success: true, message: 'Akun berhasil ditambahkan.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -831,12 +973,12 @@ function toggleAccountStatus(accountId, activeStatus) {
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(accountId)) {
         sheet.getRange(i + 1, 6).setValue(activeStatus);
-        return { ok: true, success: true, message: 'Status akun berhasil diperbarui.' };
+        return { success: true, message: 'Status akun berhasil diperbarui.' };
       }
     }
-    return { ok: false, success: false, message: 'Akun tidak ditemukan.' };
+    return { success: false, message: 'Akun tidak ditemukan.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -930,9 +1072,9 @@ function getPostsInternal() {
 
 function getPosts() {
   try {
-    return { ok: true, success: true, data: serializeForClient(getPostsInternal()) };
+    return { success: true, data: serializeForClient(getPostsInternal()) };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -941,12 +1083,12 @@ function getPostDetail(postId) {
     const posts = getPostsInternal();
     for (let i = 0; i < posts.length; i++) {
       if (posts[i].id === postId) {
-        return { ok: true, success: true, data: serializeForClient(posts[i]) };
+        return { success: true, data: serializeForClient(posts[i]) };
       }
     }
-    return { ok: false, success: false, message: 'Postingan tidak ditemukan.' };
+    return { success: false, message: 'Postingan tidak ditemukan.' };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -1005,14 +1147,13 @@ function getNextTrackingCode(akunId, dateStr) {
     const generatedTrackingCode = tagBase + seqFormatted;
 
     return {
-      ok: true,
       success: true,
       data: {
         code: generatedTrackingCode
       }
     };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal mengambil kode pelacakan: ' + err.message };
+    return { success: false, message: 'Gagal mengambil kode pelacakan: ' + err.message };
   }
 }
 
@@ -1021,7 +1162,7 @@ function savePost(payload) {
   try {
     lock.waitLock(10000);
     if (!payload.produk_id) {
-      return { ok: false, success: false, message: 'Pilih produk terlebih dahulu.' };
+      return { success: false, message: 'Pilih produk terlebih dahulu.' };
     }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -1055,19 +1196,19 @@ function savePost(payload) {
 
     // Aturan Facebook: Jangan campur foto & video
     if (photoCount > 0 && videoCount > 0) {
-      return { ok: false, success: false, message: 'Di Facebook, foto dan video harus dipisah menjadi dua postingan.' };
+      return { success: false, message: 'Di Facebook, foto dan video harus dipisah menjadi dua postingan.' };
     }
 
     if (payload.tipe === 'TEKS' && (photoCount > 0 || videoCount > 0)) {
-      return { ok: false, success: false, message: 'Tipe postingan teks tidak boleh memiliki media.' };
+      return { success: false, message: 'Tipe postingan teks tidak boleh memiliki media.' };
     }
 
     if (payload.tipe === 'VIDEO' && (videoCount !== 1 || photoCount !== 0)) {
-      return { ok: false, success: false, message: 'Tipe video harus memilih tepat satu berkas video.' };
+      return { success: false, message: 'Tipe video harus memilih tepat satu berkas video.' };
     }
 
     if (payload.tipe === 'FOTO' && (photoCount < 1 || photoCount > 10 || videoCount > 0)) {
-      return { ok: false, success: false, message: 'Tipe foto harus memilih antara 1 hingga 10 foto.' };
+      return { success: false, message: 'Tipe foto harus memilih antara 1 hingga 10 foto.' };
     }
 
     const data = sheet.getDataRange().getValues();
@@ -1130,7 +1271,7 @@ function savePost(payload) {
           }
 
           if (count >= limit) {
-            return { ok: false, success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + newTgl + ' sudah penuh (' + count + '/' + limit + ').' };
+            return { success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + newTgl + ' sudah penuh (' + count + '/' + limit + ').' };
           }
         }
 
@@ -1151,7 +1292,6 @@ function savePost(payload) {
         }
 
         return {
-          ok: true,
           success: true,
           message: 'Postingan berhasil diperbarui.',
           data: { id: payload.id, kode_pelacakan: String(existingRow[6]), status: existingStatus, akun_id: payload.akun_id || existingRow[13] }
@@ -1162,13 +1302,12 @@ function savePost(payload) {
     // Simpan Postingan Baru (cek keunikan kode_pelacakan)
     const trackingCode = String(payload.kode_pelacakan || '').trim();
     if (!trackingCode) {
-      return { ok: false, success: false, message: 'Kode pelacakan belum dibuat. Silakan klik Tambah Link Affiliate terlebih dahulu.' };
+      return { success: false, message: 'Kode pelacakan belum dibuat. Silakan klik Tambah Link Affiliate terlebih dahulu.' };
     }
 
     for (let j = 1; j < data.length; j++) {
       if (String(data[j][6]).trim() === trackingCode) {
         return {
-          ok: false,
           success: false,
           message: 'Kode ' + trackingCode + ' sudah dipakai. Tutup form dan buka lagi untuk mendapat kode baru.'
         };
@@ -1194,7 +1333,6 @@ function savePost(payload) {
     ]);
 
     return {
-      ok: true,
       success: true,
       message: 'Postingan berhasil dibuat.',
       data: {
@@ -1205,7 +1343,7 @@ function savePost(payload) {
       }
     };
   } catch (err) {
-    return { ok: false, success: false, message: 'Gagal menyimpan postingan: ' + err.message };
+    return { success: false, message: 'Gagal menyimpan postingan: ' + err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1230,7 +1368,7 @@ function updatePostStatus(postId, newStatus, extraData) {
     }
 
     if (rowIndex === -1) {
-      return { ok: false, success: false, message: 'Postingan tidak ditemukan.' };
+      return { success: false, message: 'Postingan tidak ditemukan.' };
     }
 
     let finalStatus = newStatus;
@@ -1242,13 +1380,13 @@ function updatePostStatus(postId, newStatus, extraData) {
       const postAkunId = extraData && extraData.akun_id ? String(extraData.akun_id).trim() : String(postRow[13] || '').trim();
 
       if (!tgl || !jam) {
-        return { ok: false, success: false, message: 'Tanggal dan jam tayang wajib diisi untuk menjadwalkan.' };
+        return { success: false, message: 'Tanggal dan jam tayang wajib diisi untuk menjadwalkan.' };
       }
       if (!String(postRow[7] || '').trim()) {
-        return { ok: false, success: false, message: 'Link affiliate wajib diisi sebelum menjadwalkan.' };
+        return { success: false, message: 'Link affiliate wajib diisi sebelum menjadwalkan.' };
       }
       if (!String(postRow[8] || '').trim()) {
-        return { ok: false, success: false, message: 'Caption wajib diisi sebelum menjadwalkan.' };
+        return { success: false, message: 'Caption wajib diisi sebelum menjadwalkan.' };
       }
 
       let limit = 3;
@@ -1277,7 +1415,7 @@ function updatePostStatus(postId, newStatus, extraData) {
       }
 
       if (count >= limit) {
-        return { ok: false, success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + tgl + ' sudah penuh (' + count + '/' + limit + ').' };
+        return { success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + tgl + ' sudah penuh (' + count + '/' + limit + ').' };
       }
 
       if (extraData && extraData.jam_tayang) sheet.getRange(rowIndex, 6).setValue(extraData.jam_tayang);
@@ -1286,7 +1424,7 @@ function updatePostStatus(postId, newStatus, extraData) {
     } else if (newStatus === 'sudah tayang' || newStatus === 'sudah_tayang') {
       const fbUrl = extraData && extraData.url_postingan ? String(extraData.url_postingan).trim() : '';
       if (!fbUrl) {
-        return { ok: false, success: false, message: 'URL postingan Facebook wajib diisi.' };
+        return { success: false, message: 'URL postingan Facebook wajib diisi.' };
       }
       sheet.getRange(rowIndex, 11).setValue(fbUrl);
       finalStatus = 'sudah tayang';
@@ -1299,9 +1437,9 @@ function updatePostStatus(postId, newStatus, extraData) {
     sheet.getRange(rowIndex, 10).setValue(finalStatus);
     sheet.getRange(rowIndex, 13).setValue(nowStr);
 
-    return { ok: true, success: true, message: 'Status berhasil diperbarui.', data: { status: finalStatus } };
+    return { success: true, message: 'Status berhasil diperbarui.', data: { status: finalStatus } };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
   }
@@ -1317,7 +1455,7 @@ function getDailyQuotaUsage(akunId, tanggal) {
     const postSheet = ss.getSheetByName('postingan');
     const akunSheet = ss.getSheetByName('akun');
     if (!akunSheet || !postSheet) {
-      return { ok: true, success: true, data: { count: 0, limit: 3, accountName: '', available: true } };
+      return { success: true, data: { count: 0, limit: 3, accountName: '', available: true } };
     }
 
     let limit = 3;
@@ -1346,7 +1484,6 @@ function getDailyQuotaUsage(akunId, tanggal) {
     }
 
     return {
-      ok: true,
       success: true,
       data: {
         count: count,
@@ -1356,7 +1493,7 @@ function getDailyQuotaUsage(akunId, tanggal) {
       }
     };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
 
@@ -1372,11 +1509,10 @@ function duplicatePost(postId) {
     }
 
     if (!target) {
-      return { ok: false, success: false, message: 'Postingan tidak ditemukan.' };
+      return { success: false, message: 'Postingan tidak ditemukan.' };
     }
 
     return {
-      ok: true,
       success: true,
       message: 'Buat link affiliate baru untuk postingan ini.',
       data: serializeForClient({
@@ -1394,6 +1530,6 @@ function duplicatePost(postId) {
       })
     };
   } catch (err) {
-    return { ok: false, success: false, message: err.message };
+    return { success: false, message: err.message };
   }
 }
