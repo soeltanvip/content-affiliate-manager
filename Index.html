@@ -584,7 +584,7 @@
             <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
               <span class="text-slate-400 block font-semibold mb-0.5">Akun Publisher</span>
               <div class="font-bold text-slate-900" x-text="selectedDetailPost ? selectedDetailPost.akun_nama : ''"></div>
-              <div class="text-[10px] text-slate-500 font-mono" x-text="selectedDetailPost ? 'Prefix: ' + selectedDetailPost.akun_prefix : ''"></div>
+              <div class="text-[10px] text-slate-500 font-mono" x-text="selectedDetailPost ? 'Kode Tag: ' + selectedDetailPost.akun_prefix : ''"></div>
             </div>
           </div>
 
@@ -708,7 +708,7 @@
             <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
               <th class="p-3">Nama Akun</th>
               <th class="p-3">Platform</th>
-              <th class="p-3">Prefix Tracking</th>
+              <th class="p-3">Kode Tag</th>
               <th class="p-3">Batas Post / Hari</th>
               <th class="p-3">Status</th>
               <th class="p-3 text-right">Aksi</th>
@@ -1255,9 +1255,8 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Prefix Tracking (Maks 4 Huruf/Angka) *</label>
-          <input type="text" x-model="accountForm.prefix" maxlength="4" :disabled="accountForm.id && accountForm.has_posts" @input="accountForm.prefix = accountForm.prefix.toUpperCase().replace(/[^A-Z0-9]/g, '')" required placeholder="DD" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono uppercase bg-white disabled:bg-slate-100 disabled:text-slate-500">
-          <span x-show="accountForm.id && accountForm.has_posts" class="text-[11px] text-amber-700">Prefix dikunci karena akun sudah memiliki riwayat postingan.</span>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Kode Tag (Maks 6 Huruf/Angka) *</label>
+          <input type="text" x-model="accountForm.prefix" maxlength="6" @input="accountForm.prefix = accountForm.prefix.toUpperCase().replace(/[^A-Z0-9]/g, '')" required placeholder="Contoh: DAN" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono uppercase bg-white">
         </div>
 
         <div>
@@ -2187,21 +2186,40 @@
 
           if (!this.postForm.kode_pelacakan) {
             this.isLoadingTrackingCode = true;
-            google.script.run
-              .withSuccessHandler(function(res) {
-                self.isLoadingTrackingCode = false;
-                if (res && res.success && res.data && res.data.code) {
-                  self.postForm.kode_pelacakan = res.data.code;
-                  self.affiliateLinkModalOpen = true;
-                } else {
-                  self.showToast('Gagal membuat kode: ' + (res ? res.message : 'Terjadi kesalahan'));
-                }
-              })
-              .withFailureHandler(function(err) {
-                self.isLoadingTrackingCode = false;
-                self.showToast('Galat server: ' + err.message);
-              })
-              .getNextTrackingCode(this.postForm.akun_id, this.postForm.tanggal_rencana);
+            if (this.postForm.id) {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  self.isLoadingTrackingCode = false;
+                  if (res && res.success && res.data && res.data.code) {
+                    self.postForm.kode_pelacakan = res.data.code;
+                    self.affiliateLinkModalOpen = true;
+                    self.refreshPosts();
+                  } else {
+                    self.showToast('Gagal menetapkan kode: ' + (res ? res.message : 'Terjadi kesalahan'));
+                  }
+                })
+                .withFailureHandler(function(err) {
+                  self.isLoadingTrackingCode = false;
+                  self.showToast('Galat server: ' + err.message);
+                })
+                .assignTrackingCode(this.postForm.id);
+            } else {
+              google.script.run
+                .withSuccessHandler(function(res) {
+                  self.isLoadingTrackingCode = false;
+                  if (res && res.success && res.data && res.data.code) {
+                    self.postForm.kode_pelacakan = res.data.code;
+                    self.affiliateLinkModalOpen = true;
+                  } else {
+                    self.showToast('Gagal membuat kode: ' + (res ? res.message : 'Terjadi kesalahan'));
+                  }
+                })
+                .withFailureHandler(function(err) {
+                  self.isLoadingTrackingCode = false;
+                  self.showToast('Galat server: ' + err.message);
+                })
+                .getNextTrackingCode(this.postForm.akun_id, this.postForm.tanggal_rencana);
+            }
           } else {
             this.affiliateLinkModalOpen = true;
           }

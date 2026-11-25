@@ -885,55 +885,35 @@ function saveAccount(payload) {
 
     let cleanPrefix = String(payload.prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!cleanPrefix) {
-      return { success: false, message: 'Prefix tracking wajib berupa huruf/angka.' };
+      return { success: false, message: 'Kode Tag wajib berupa huruf/angka.' };
     }
-    if (cleanPrefix.length > 4) {
-      cleanPrefix = cleanPrefix.substring(0, 4);
+    if (cleanPrefix.length > 6) {
+      cleanPrefix = cleanPrefix.substring(0, 6);
     }
 
-    // Cek keunikan prefix di semua akun
+    // Cek keunikan Kode Tag di semua akun
     for (let i = 1; i < data.length; i++) {
       const rowId = String(data[i][0]);
       const rowPrefix = String(data[i][3] || '').toUpperCase();
       if ((!isEdit || rowId !== payload.id) && rowPrefix === cleanPrefix) {
-        return { success: false, message: 'Prefix ' + cleanPrefix + ' sudah digunakan akun lain.' };
+        return { success: false, message: 'Kode Tag ' + cleanPrefix + ' sudah digunakan akun lain.' };
       }
     }
 
     if (isEdit) {
       let rowIndex = -1;
-      let existingRow = null;
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][0]) === String(payload.id)) {
           rowIndex = i + 1;
-          existingRow = data[i];
           break;
         }
       }
       if (rowIndex !== -1) {
-        // Cek jika akun sudah dipakai postingan
-        const postSheet = ss.getSheetByName('postingan');
-        let hasPosts = false;
-        if (postSheet) {
-          const postData = postSheet.getDataRange().getValues();
-          for (let p = 1; p < postData.length; p++) {
-            if (String(postData[p][13] || '') === String(payload.id)) {
-              hasPosts = true;
-              break;
-            }
-          }
-        }
-
-        const existingPrefix = String(existingRow[3] || '').toUpperCase();
-        if (hasPosts && existingPrefix !== cleanPrefix) {
-          return { success: false, message: 'Prefix tidak bisa diubah karena sudah ada postingan yang memakai akun ini.' };
-        }
-
         const aktifVal = payload.aktif !== false && String(payload.aktif) !== 'false';
         sheet.getRange(rowIndex, 2, 1, 5).setValues([[
           payload.nama_akun,
           payload.platform || 'Facebook Page',
-          hasPosts ? existingPrefix : cleanPrefix,
+          cleanPrefix,
           parseInt(payload.batas_harian, 10) || 3,
           aktifVal
         ]]);
@@ -1092,59 +1072,89 @@ function getPostDetail(postId) {
   }
 }
 
-// Mendapatkan nomor urut tracking code berikutnya tanpa menulis ke basis data (berdasarkan akun)
+// Helper format tanggal rencana tayang ke format DDMMYY
+function formatToDDMMYY(dateVal) {
+  if (!dateVal) {
+    const d = new Date();
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const yy = String(d.getFullYear()).slice(-2);
+    return dd + mm + yy;
+  }
+  if (dateVal instanceof Date) {
+    const dd = ('0' + dateVal.getDate()).slice(-2);
+    const mm = ('0' + (dateVal.getMonth() + 1)).slice(-2);
+    const yy = String(dateVal.getFullYear()).slice(-2);
+    return dd + mm + yy;
+  }
+  const clean = String(dateVal).trim().split('T')[0];
+  const parts = clean.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const yy = parts[0].slice(-2);
+    const mm = ('0' + parseInt(parts[1], 10)).slice(-2);
+    const dd = ('0' + parseInt(parts[2], 10)).slice(-2);
+    return dd + mm + yy;
+  }
+  const d = new Date(clean);
+  if (!isNaN(d.getTime())) {
+    const dd = ('0' + d.getDate()).slice(-2);
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    const yy = String(d.getFullYear()).slice(-2);
+    return dd + mm + yy;
+  }
+  return '010100';
+}
+
+// Internal generator kode pelacakan: DDMMYY + KODE_TAG + URUT (01..)
+function getNextTrackingCodeInternal(ss, akunId, dateStr) {
+  let sheet = ss.getSheetByName('postingan');
+  if (!sheet) {
+    setupDatabase();
+    sheet = ss.getSheetByName('postingan');
+  }
+
+  const akunSheet = ss.getSheetByName('akun');
+  let kodeTag = 'DD';
+  if (akunSheet && akunId) {
+    const aData = akunSheet.getDataRange().getValues();
+    for (let a = 1; a < aData.length; a++) {
+      if (String(aData[a][0]) === String(akunId)) {
+        kodeTag = String(aData[a][3] || 'DD').toUpperCase();
+        break;
+      }
+    }
+  }
+  kodeTag = kodeTag.replace(/[^A-Z0-9]/g, '');
+  if (!kodeTag) kodeTag = 'DD';
+  if (kodeTag.length > 6) kodeTag = kodeTag.substring(0, 6);
+
+  const datePart = formatToDDMMYY(dateStr);
+  const tagBase = datePart + kodeTag;
+
+  const data = sheet.getDataRange().getValues();
+  let maxSeq = 0;
+  for (let j = 1; j < data.length; j++) {
+    const code = String(data[j][6] || '').trim();
+    if (code.indexOf(tagBase) === 0) {
+      const seqNum = parseInt(code.substring(tagBase.length), 10);
+      if (!isNaN(seqNum) && seqNum > maxSeq) {
+        maxSeq = seqNum;
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  const seqFormatted = nextSeq < 10 ? '0' + nextSeq : String(nextSeq);
+  return tagBase + seqFormatted;
+}
+
+// Mendapatkan nomor urut tracking code berikutnya tanpa menulis ke basis data
 function getNextTrackingCode(akunId, dateStr) {
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName('postingan');
-    if (!sheet) {
-      setupDatabase();
-      sheet = ss.getSheetByName('postingan');
-    }
-
-    const akunSheet = ss.getSheetByName('akun');
-    let prefix = 'DD';
-    if (akunSheet && akunId) {
-      const aData = akunSheet.getDataRange().getValues();
-      for (let a = 1; a < aData.length; a++) {
-        if (String(aData[a][0]) === String(akunId)) {
-          prefix = String(aData[a][3] || 'DD').toUpperCase();
-          break;
-        }
-      }
-    }
-    prefix = prefix.replace(/[^A-Z0-9]/g, '');
-    if (!prefix) prefix = 'DD';
-    if (prefix.length > 4) prefix = prefix.substring(0, 4);
-
-    let datePart = '';
-    if (dateStr) {
-      datePart = String(dateStr).replace(/[^0-9]/g, '').slice(2, 8);
-    }
-    if (datePart.length !== 6) {
-      const d = new Date();
-      const yy = String(d.getFullYear()).slice(-2);
-      const mm = ('0' + (d.getMonth() + 1)).slice(-2);
-      const dd = ('0' + d.getDate()).slice(-2);
-      datePart = yy + mm + dd;
-    }
-
-    const tagBase = prefix + datePart;
-    const data = sheet.getDataRange().getValues();
-    let maxSeq = 0;
-    for (let j = 1; j < data.length; j++) {
-      const code = String(data[j][6] || '').trim();
-      if (code.indexOf(tagBase) === 0) {
-        const seqNum = parseInt(code.substring(tagBase.length), 10);
-        if (!isNaN(seqNum) && seqNum > maxSeq) {
-          maxSeq = seqNum;
-        }
-      }
-    }
-
-    const nextSeq = maxSeq + 1;
-    const seqFormatted = nextSeq < 10 ? '0' + nextSeq : String(nextSeq);
-    const generatedTrackingCode = tagBase + seqFormatted;
+    const generatedTrackingCode = getNextTrackingCodeInternal(ss, akunId, dateStr);
 
     return {
       success: true,
@@ -1154,6 +1164,55 @@ function getNextTrackingCode(akunId, dateStr) {
     };
   } catch (err) {
     return { success: false, message: 'Gagal mengambil kode pelacakan: ' + err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Menetapkan kode pelacakan pada postingan lama yang masih kosong
+function assignTrackingCode(postId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('postingan');
+    if (!sheet) return { success: false, message: 'Sheet postingan tidak ditemukan.' };
+
+    const data = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    let postRow = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(postId)) {
+        rowIndex = i + 1;
+        postRow = data[i];
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      return { success: false, message: 'Postingan tidak ditemukan.' };
+    }
+
+    const existingCode = String(postRow[6] || '').trim();
+    if (existingCode) {
+      return { success: true, data: { code: existingCode } };
+    }
+
+    const akunId = String(postRow[13] || '').trim();
+    const tgl = postRow[4];
+    if (!akunId) {
+      return { success: false, message: 'Pilih akun terlebih dahulu sebelum membuat kode pelacakan.' };
+    }
+
+    const newCode = getNextTrackingCodeInternal(ss, akunId, tgl);
+    sheet.getRange(rowIndex, 7).setValue(newCode);
+    sheet.getRange(rowIndex, 13).setValue(new Date().toISOString());
+
+    return { success: true, data: { code: newCode } };
+  } catch (err) {
+    return { success: false, message: 'Gagal menetapkan kode pelacakan: ' + err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1281,7 +1340,7 @@ function savePost(payload) {
           payload.tipe,
           payload.tanggal_rencana || '',
           payload.jam_tayang || '',
-          existingRow[6], // kode_pelacakan tidak boleh berubah
+          existingRow[6], // kode_pelacakan tidak pernah berubah
           payload.link_affiliate || '',
           finalCaption,
           existingStatus
