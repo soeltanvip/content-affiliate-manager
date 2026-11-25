@@ -104,92 +104,188 @@
           </button>
         </div>
 
-        <!-- Filter & Search -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <div class="sm:col-span-2 relative">
-            <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400">search</span>
-            <input type="text" x-model="searchQuery" placeholder="Cari nama atau kode produk..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent bg-white">
+        <!-- Filter & Search & View Mode -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
+          <div class="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2 relative">
+              <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400">search</span>
+              <input type="text" x-model="productSearchQuery" @input="onProductSearchChange()" placeholder="Cari nama atau kode produk..." class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 bg-white">
+            </div>
+            <div>
+              <select x-model="selectedCategory" @change="productPage = 1; fetchProducts()" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 bg-white">
+                <option value="">Semua Kategori</option>
+                <template x-for="cat in categories" :key="cat">
+                  <option :value="cat" x-text="cat"></option>
+                </template>
+              </select>
+            </div>
           </div>
-          <div>
-            <select x-model="selectedCategory" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 bg-white">
-              <option value="">Semua Kategori</option>
-              <template x-for="cat in categories" :key="cat">
-                <option :value="cat" x-text="cat"></option>
-              </template>
-            </select>
+          <!-- Toggle Mode Tampilan (Grid / List) -->
+          <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg shrink-0 self-end sm:self-auto">
+            <button type="button" @click="productViewMode = 'grid'" :class="productViewMode === 'grid' ? 'bg-white shadow text-blue-900' : 'text-slate-500 hover:text-slate-800'" class="p-1.5 rounded transition" title="Tampilan Grid">
+              <span class="material-symbols-outlined text-sm">grid_view</span>
+            </button>
+            <button type="button" @click="productViewMode = 'list'" :class="productViewMode === 'list' ? 'bg-white shadow text-blue-900' : 'text-slate-500 hover:text-slate-800'" class="p-1.5 rounded transition" title="Tampilan Daftar Ringkas">
+              <span class="material-symbols-outlined text-sm">view_list</span>
+            </button>
           </div>
         </div>
 
         <!-- Skeleton Loader Saat Memuat -->
-        <div x-show="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <template x-for="i in [1,2,3]" :key="i">
-            <div class="border border-slate-200 rounded-lg p-4 bg-white animate-pulse">
-              <div class="w-full h-40 bg-slate-200 rounded-md mb-3"></div>
-              <div class="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+        <div x-show="isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <template x-for="i in [1,2,3,4]" :key="i">
+            <div class="border border-slate-200 rounded-lg p-3 bg-white animate-pulse">
+              <div class="w-full h-28 bg-slate-200 rounded-md mb-2"></div>
+              <div class="h-3.5 bg-slate-200 rounded w-3/4 mb-1.5"></div>
               <div class="h-3 bg-slate-200 rounded w-1/2"></div>
             </div>
           </template>
         </div>
 
-        <!-- Grid Produk -->
-        <div x-show="!isLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <template x-for="prod in filteredProducts" :key="prod.id">
-            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between hover:border-slate-300 transition">
+        <!-- TAMPILAN 1: GRID PRODUK (4 KOLOM DI LAYAR LEBAR, TINGGI COVER ~112PX) -->
+        <div x-show="!isLoading && productViewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <template x-for="prod in products" :key="prod.id">
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between hover:border-slate-300 transition relative group">
               <div>
-                <!-- Cover Image -->
-                <div class="h-44 w-full bg-slate-100 relative overflow-hidden flex items-center justify-center">
+                <!-- Cover Image (h-28 = 112px) -->
+                <div class="h-28 w-full bg-slate-100 relative overflow-hidden flex items-center justify-center">
                   <template x-if="prod.cover_url">
-                    <img :src="prod.cover_url" :alt="prod.nama" class="w-full h-full object-cover">
+                    <img :src="prod.cover_url" :alt="prod.nama" loading="lazy" class="w-full h-full object-cover">
                   </template>
                   <template x-if="!prod.cover_url">
                     <div class="text-slate-400 flex flex-col items-center">
-                      <span class="material-symbols-outlined text-4xl">image_not_supported</span>
-                      <span class="text-xs mt-1">Tanpa Gambar</span>
+                      <span class="material-symbols-outlined text-3xl">image_not_supported</span>
+                      <span class="text-[10px] mt-0.5">Tanpa Gambar</span>
                     </div>
                   </template>
-                  <span class="absolute top-2 left-2 bg-slate-900/80 text-white font-mono text-xs px-2 py-0.5 rounded" x-text="prod.kode_produk"></span>
-                  <span class="absolute top-2 right-2 bg-white/90 text-slate-800 text-xs px-2 py-0.5 rounded font-medium border border-slate-200" x-text="prod.kategori || 'Umum'"></span>
+                  <!-- Badge SKU di kiri atas -->
+                  <span class="absolute top-1.5 left-1.5 bg-slate-900/80 text-white font-mono text-[10px] px-1.5 py-0.5 rounded" x-text="prod.kode_produk"></span>
+
+                  <!-- Ikon Aksi Edit & Hapus di Pojok Kanan Atas -->
+                  <div class="absolute top-1.5 right-1.5 flex items-center space-x-1 z-10">
+                    <button @click.stop="editProduct(prod)" class="p-1 bg-white/95 hover:bg-white text-slate-700 rounded shadow-sm border border-slate-200 transition" title="Ubah Data">
+                      <span class="material-symbols-outlined text-sm">edit</span>
+                    </button>
+                    <button @click.stop="confirmDeleteProduct(prod)" class="p-1 bg-white/95 hover:bg-rose-50 text-rose-600 rounded shadow-sm border border-rose-200 transition" title="Hapus Produk">
+                      <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Info Produk -->
-                <div class="p-4">
-                  <h3 class="font-bold text-slate-900 text-base mb-1 line-clamp-1" x-text="prod.nama"></h3>
-                  <div class="flex items-center text-xs text-slate-500 mb-3 space-x-2">
-                    <span class="flex items-center">
-                      <span class="material-symbols-outlined text-sm mr-1">perm_media</span>
-                      <span x-text="(prod.media_count || 0) + ' Aset Media'"></span>
+                <div class="p-3">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]" x-text="prod.kategori || 'Umum'"></span>
+                    <span class="text-[10px] text-slate-400 flex items-center">
+                      <span class="material-symbols-outlined text-xs mr-0.5">perm_media</span>
+                      <span x-text="prod.media_count || 0"></span>
                     </span>
                   </div>
+                  <h3 class="font-bold text-slate-900 text-xs mb-1 line-clamp-1" :title="prod.nama" x-text="prod.nama"></h3>
                 </div>
               </div>
 
-              <!-- Aksi Kartu -->
-              <div class="p-4 pt-0 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
-                <button @click="viewProductMedia(prod)" class="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold py-2 px-3 rounded flex items-center justify-center space-x-1 transition">
-                  <span class="material-symbols-outlined text-sm">folder_open</span>
+              <!-- Aksi Kartu (Tombol Lebih Kecil) -->
+              <div class="p-3 pt-0 border-t border-slate-100 flex items-center gap-1.5 mt-1">
+                <button @click="viewProductMedia(prod)" class="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-semibold py-1.5 px-2 rounded flex items-center justify-center space-x-1 transition">
+                  <span class="material-symbols-outlined text-xs">folder_open</span>
                   <span>Detail & Media</span>
                 </button>
                 <template x-if="prod.link_dashboard">
-                  <a :href="prod.link_dashboard" target="_blank" class="p-2 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Buka Dashboard Shopee">
-                    <span class="material-symbols-outlined text-base">open_in_new</span>
+                  <a :href="prod.link_dashboard" target="_blank" rel="noopener" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Buka Dashboard Shopee">
+                    <span class="material-symbols-outlined text-sm">open_in_new</span>
                   </a>
                 </template>
-                <button @click="editProduct(prod)" class="p-2 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Ubah Data">
-                  <span class="material-symbols-outlined text-base">edit</span>
-                </button>
-                <button @click="confirmDeleteProduct(prod)" class="p-2 text-rose-600 hover:bg-rose-50 rounded border border-rose-100" title="Hapus Produk">
-                  <span class="material-symbols-outlined text-base">delete</span>
-                </button>
               </div>
             </div>
           </template>
         </div>
 
+        <!-- TAMPILAN 2: DAFTAR RINGKAS PRODUK (SATU BARIS PER PRODUK) -->
+        <div x-show="!isLoading && productViewMode === 'list'" class="bg-white border border-slate-200 rounded-lg overflow-x-auto shadow-sm">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                <th class="p-3 w-16">Cover</th>
+                <th class="p-3">Kode / SKU</th>
+                <th class="p-3">Nama Produk</th>
+                <th class="p-3">Kategori</th>
+                <th class="p-3">Aset Media</th>
+                <th class="p-3 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <template x-for="prod in products" :key="prod.id">
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="p-2.5">
+                    <div class="w-10 h-10 rounded bg-slate-100 overflow-hidden flex items-center justify-center border border-slate-200 shrink-0">
+                      <template x-if="prod.cover_url">
+                        <img :src="prod.cover_url" loading="lazy" class="w-full h-full object-cover">
+                      </template>
+                      <template x-if="!prod.cover_url">
+                        <span class="material-symbols-outlined text-slate-400 text-sm">image_not_supported</span>
+                      </template>
+                    </div>
+                  </td>
+                  <td class="p-3 font-mono font-bold text-blue-900" x-text="prod.kode_produk"></td>
+                  <td class="p-3 font-semibold text-slate-900" x-text="prod.nama"></td>
+                  <td class="p-3">
+                    <span class="px-2 py-0.5 rounded text-[11px] bg-slate-100 text-slate-700" x-text="prod.kategori || 'Umum'"></span>
+                  </td>
+                  <td class="p-3 text-slate-600">
+                    <span class="inline-flex items-center space-x-1">
+                      <span class="material-symbols-outlined text-sm text-slate-400">perm_media</span>
+                      <span x-text="(prod.media_count || 0) + ' berkas'"></span>
+                    </span>
+                  </td>
+                  <td class="p-3 text-right">
+                    <div class="inline-flex items-center space-x-1">
+                      <button @click="viewProductMedia(prod)" class="bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-semibold px-2.5 py-1.5 rounded flex items-center space-x-1">
+                        <span class="material-symbols-outlined text-xs">folder_open</span>
+                        <span>Detail</span>
+                      </button>
+                      <template x-if="prod.link_dashboard">
+                        <a :href="prod.link_dashboard" target="_blank" rel="noopener" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Buka Shopee">
+                          <span class="material-symbols-outlined text-sm">open_in_new</span>
+                        </a>
+                      </template>
+                      <button @click="editProduct(prod)" class="p-1.5 text-slate-600 hover:bg-slate-100 rounded border border-slate-200" title="Ubah Data">
+                        <span class="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button @click="confirmDeleteProduct(prod)" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded border border-rose-200" title="Hapus Produk">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
         <!-- Status Kosong -->
-        <div x-show="!isLoading && filteredProducts.length === 0" class="text-center py-12 bg-white rounded-lg border border-slate-200">
+        <div x-show="!isLoading && products.length === 0" class="text-center py-12 bg-white rounded-lg border border-slate-200 mt-4">
           <span class="material-symbols-outlined text-5xl text-slate-300">inventory</span>
           <p class="mt-2 text-slate-600 text-sm font-medium">Belum ada produk yang ditemukan.</p>
           <button @click="openProductModal()" class="mt-3 text-xs bg-blue-900 text-white px-3 py-1.5 rounded font-medium">Tambah Produk Baru</button>
+        </div>
+
+        <!-- Navigasi Halaman Produk (25 Data per Halaman) -->
+        <div x-show="!isLoading && productTotal > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 px-1 text-xs text-slate-600">
+          <div>
+            Menampilkan <strong x-text="productTotal === 0 ? 0 : (productPage - 1) * 25 + 1"></strong>–<strong x-text="Math.min(productPage * 25, productTotal)"></strong> dari <strong x-text="productTotal"></strong> produk
+          </div>
+          <div class="flex items-center space-x-2">
+            <button type="button" :disabled="productPage <= 1" @click="productPage--; fetchProducts()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center space-x-1">
+              <span class="material-symbols-outlined text-sm">chevron_left</span>
+              <span>Sebelumnya</span>
+            </button>
+            <span class="px-2 py-1 bg-slate-100 rounded text-slate-700 font-semibold" x-text="productPage + ' / ' + productTotalPages"></span>
+            <button type="button" :disabled="productPage >= productTotalPages" @click="productPage++; fetchProducts()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center space-x-1">
+              <span>Berikutnya</span>
+              <span class="material-symbols-outlined text-sm">chevron_right</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -197,7 +293,7 @@
       <div x-show="selectedProduct">
         <!-- Breadcrumb / Tombol Kembali -->
         <div class="flex items-center justify-between mb-4">
-          <button @click="selectedProduct = null" class="inline-flex items-center space-x-1 text-sm font-medium text-slate-600 hover:text-slate-900">
+          <button @click="selectedProduct = null; newProductBanner = false; fetchProducts()" class="inline-flex items-center space-x-1 text-sm font-medium text-slate-600 hover:text-slate-900">
             <span class="material-symbols-outlined">arrow_back</span>
             <span>Kembali ke Daftar Produk</span>
           </button>
@@ -205,6 +301,23 @@
             <span class="material-symbols-outlined text-sm">cloud_upload</span>
             <span>Upload Batch Baru</span>
           </button>
+        </div>
+
+        <!-- Banner Produk Tersimpan (Langsung Setelah Tambah Baru) -->
+        <div x-show="newProductBanner" class="mb-4 p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div class="flex items-center space-x-2.5">
+            <span class="material-symbols-outlined text-emerald-600 text-xl shrink-0">check_circle</span>
+            <span class="text-xs sm:text-sm font-semibold">Produk tersimpan. Unggah media sekarang.</span>
+          </div>
+          <div class="flex items-center space-x-2 self-end sm:self-auto">
+            <button @click="openBatchUploadModal()" class="inline-flex items-center space-x-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+              <span class="material-symbols-outlined text-sm">cloud_upload</span>
+              <span>Upload Batch Baru</span>
+            </button>
+            <button @click="newProductBanner = false" class="text-emerald-700 hover:text-emerald-950 p-1">
+              <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
         </div>
 
         <!-- Kartu Ringkasan Produk -->
@@ -371,31 +484,31 @@
 
       <!-- FILTER & PENCARIAN -->
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-        <!-- Baris 1: Chip Cepat & Search -->
+        <!-- Baris 1: Chip Cepat & Search (Debounce 300ms) -->
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <!-- Chip Cepat -->
           <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg w-fit text-xs font-semibold">
-            <button type="button" @click="dateChip = 'all'" :class="dateChip === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Semua</button>
-            <button type="button" @click="dateChip = 'today'" :class="dateChip === 'today' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Hari ini</button>
-            <button type="button" @click="dateChip = 'this_week'" :class="dateChip === 'this_week' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Minggu ini</button>
+            <button type="button" @click="dateChip = 'all'; postPage = 1; fetchPosts()" :class="dateChip === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Semua</button>
+            <button type="button" @click="dateChip = 'today'; postPage = 1; fetchPosts()" :class="dateChip === 'today' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Hari ini</button>
+            <button type="button" @click="dateChip = 'this_week'; postPage = 1; fetchPosts()" :class="dateChip === 'this_week' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Minggu ini</button>
           </div>
 
           <!-- Search -->
           <div class="relative flex-1 max-w-md">
             <span class="material-symbols-outlined absolute left-3 top-2 text-slate-400 text-sm">search</span>
-            <input type="text" x-model="searchQuery" placeholder="Cari kode pelacakan atau caption..." class="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-900">
+            <input type="text" x-model="postSearchQuery" @input="onPostSearchChange()" placeholder="Cari kode pelacakan, caption, headline..." class="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-900">
           </div>
         </div>
 
-        <!-- Baris 2: Akun, Status & Tanggal -->
+        <!-- Baris 2: Akun, Status & Tanggal (Server-side Filter) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 text-xs">
           <!-- Filter Akun -->
           <div>
             <label class="block font-bold text-slate-600 mb-1">Filter Akun</label>
-            <select x-model="filterAccount" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white">
+            <select x-model="filterAccount" @change="postPage = 1; fetchPosts()" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white">
               <option value="">Semua Akun</option>
               <template x-for="acc in accounts" :key="acc.id">
-                <option :value="acc.id" x-text="acc.nama_akun + ' (' + acc.prefix + ')'"></option>
+                <option :value="acc.id" x-text="acc.nama_akun + ' (' + acc.prefix + ' - ' + acc.platform + ')'"></option>
               </template>
             </select>
           </div>
@@ -405,15 +518,15 @@
             <label class="block font-bold text-slate-600 mb-1">Status</label>
             <div class="flex items-center space-x-2 pt-1">
               <label class="inline-flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" value="draf" x-model="filterStatuses" class="rounded text-blue-900">
+                <input type="checkbox" value="draf" x-model="filterStatuses" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
                 <span class="text-slate-700">Draf</span>
               </label>
               <label class="inline-flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" value="terjadwal" x-model="filterStatuses" class="rounded text-blue-900">
+                <input type="checkbox" value="terjadwal" x-model="filterStatuses" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
                 <span class="text-slate-700">Terjadwal</span>
               </label>
               <label class="inline-flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" value="sudah tayang" x-model="filterStatuses" class="rounded text-blue-900">
+                <input type="checkbox" value="sudah tayang" x-model="filterStatuses" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
                 <span class="text-slate-700">Tayang</span>
               </label>
             </div>
@@ -422,18 +535,18 @@
           <!-- Rentang Tanggal -->
           <div>
             <label class="block font-bold text-slate-600 mb-1">Dari Tanggal</label>
-            <input type="date" x-model="filterDateFrom" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white">
+            <input type="date" x-model="filterDateFrom" @change="postPage = 1; fetchPosts()" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white">
           </div>
           <div>
             <label class="block font-bold text-slate-600 mb-1">Sampai Tanggal</label>
-            <input type="date" x-model="filterDateTo" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white">
+            <input type="date" x-model="filterDateTo" @change="postPage = 1; fetchPosts()" class="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white">
           </div>
         </div>
 
         <!-- Baris 3: Opsi Arsip & Indikator Kuota -->
         <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 text-xs">
           <label class="inline-flex items-center space-x-1.5 cursor-pointer text-slate-600">
-            <input type="checkbox" x-model="showArchived" class="rounded text-blue-900">
+            <input type="checkbox" x-model="showArchived" @change="postPage = 1; fetchPosts()" class="rounded text-blue-900">
             <span>Tampilkan postingan yang diarsipkan</span>
           </label>
 
@@ -463,7 +576,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <template x-for="p in filteredPosts" :key="p.id">
+            <template x-for="p in posts" :key="p.id">
               <tr @click="openPostDetail(p)" class="hover:bg-blue-50/40 cursor-pointer transition-colors">
                 <td class="p-3 font-mono font-bold text-blue-900">
                   <div class="flex items-center space-x-1">
@@ -476,7 +589,7 @@
                 <td class="p-3">
                   <div class="font-semibold text-slate-900 line-clamp-1" x-text="p.produk_nama"></div>
                   <template x-if="p.akun_id && p.akun_nama">
-                    <div class="text-[10px] text-slate-400 font-medium" x-text="p.akun_nama + ' (' + p.akun_prefix + ')'"></div>
+                    <div class="text-[10px] text-slate-400 font-medium" x-text="p.akun_nama + ' (' + p.akun_prefix + ' - ' + (p.akun_platform || 'FB') + ')'"></div>
                   </template>
                   <template x-if="!p.akun_id">
                     <span class="inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold border border-amber-200">Akun belum dipilih</span>
@@ -484,7 +597,10 @@
                 </td>
                 <td class="p-3">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700" x-text="p.tipe"></span>
-                  <span x-show="p.media_ids.length > 0" class="text-[10px] text-slate-400 ml-1" x-text="'(' + p.media_ids.length + ')'"></span>
+                  <span x-show="p.media_ids && p.media_ids.length > 0" class="text-[10px] text-slate-400 ml-1" x-text="'(' + p.media_ids.length + ')'"></span>
+                  <template x-if="p.headline">
+                    <div class="text-[10px] text-indigo-700 font-medium mt-0.5 truncate max-w-[140px]" x-text="'Headline: ' + p.headline"></div>
+                  </template>
                 </td>
                 <td class="p-3">
                   <div class="font-medium text-slate-700" x-text="p.tanggal_rencana || '-'"></div>
@@ -497,7 +613,7 @@
                       'bg-indigo-100 text-indigo-800': p.status === 'terjadwal',
                       'bg-emerald-100 text-emerald-800': p.status === 'sudah tayang',
                       'bg-rose-100 text-rose-800': p.status === 'diarsipkan'
-                    }" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="p.status"></span>
+                    }" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="formatStatus(p.status)"></span>
                     <span x-show="p.status === 'draf'" :class="p.link_affiliate ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-500 bg-slate-50 border-slate-200'" class="text-[10px] px-1.5 py-0.5 rounded border font-medium" x-text="p.link_affiliate ? 'Ada link' : 'Belum ada link'"></span>
                   </div>
                 </td>
@@ -527,13 +643,31 @@
                 </td>
               </tr>
             </template>
-            <tr x-show="filteredPosts.length === 0">
+            <tr x-show="posts.length === 0">
               <td colspan="6" class="p-8 text-center text-slate-400">
                 Tidak ada postingan yang sesuai filter.
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Navigasi Halaman Postingan (25 Data per Halaman) -->
+      <div x-show="postTotal > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 text-xs text-slate-600">
+        <div>
+          Menampilkan <strong x-text="postTotal === 0 ? 0 : (postPage - 1) * 25 + 1"></strong>–<strong x-text="Math.min(postPage * 25, postTotal)"></strong> dari <strong x-text="postTotal"></strong> postingan
+        </div>
+        <div class="flex items-center space-x-2">
+          <button type="button" :disabled="postPage <= 1" @click="postPage--; fetchPosts()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center space-x-1">
+            <span class="material-symbols-outlined text-sm">chevron_left</span>
+            <span>Sebelumnya</span>
+          </button>
+          <span class="px-2 py-1 bg-slate-100 rounded text-slate-700 font-semibold" x-text="postPage + ' / ' + postTotalPages"></span>
+          <button type="button" :disabled="postPage >= postTotalPages" @click="postPage++; fetchPosts()" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center space-x-1">
+            <span>Berikutnya</span>
+            <span class="material-symbols-outlined text-sm">chevron_right</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -567,7 +701,7 @@
                 'bg-indigo-100 text-indigo-800': selectedDetailPost && selectedDetailPost.status === 'terjadwal',
                 'bg-emerald-100 text-emerald-800': selectedDetailPost && selectedDetailPost.status === 'sudah tayang',
                 'bg-rose-100 text-rose-800': selectedDetailPost && selectedDetailPost.status === 'diarsipkan'
-              }" class="px-2.5 py-1 rounded-full font-bold text-xs" x-text="selectedDetailPost ? selectedDetailPost.status : ''"></span>
+              }" class="px-2.5 py-1 rounded-full font-bold text-xs" x-text="selectedDetailPost ? formatStatus(selectedDetailPost.status) : ''"></span>
               <button type="button" @click="copyText(selectedDetailPost.kode_pelacakan, 'Kode pelacakan tersalin!')" class="p-1 hover:bg-slate-200 rounded text-slate-600">
                 <span class="material-symbols-outlined text-base">content_copy</span>
               </button>
@@ -621,16 +755,41 @@
             </div>
           </div>
 
-          <!-- Caption -->
+          <!-- Caption / Teks Utama -->
           <div>
             <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-bold text-slate-700">Caption</span>
+              <span class="text-xs font-bold text-slate-700">Teks Utama / Caption</span>
               <button type="button" @click="copyText(selectedDetailPost.caption, 'Caption tersalin!')" class="text-xs text-blue-900 font-semibold hover:underline flex items-center space-x-0.5">
                 <span class="material-symbols-outlined text-xs">content_copy</span>
-                <span>Salin Caption</span>
+                <span>Salin</span>
               </button>
             </div>
-            <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 whitespace-pre-wrap max-h-40 overflow-y-auto" x-text="selectedDetailPost && selectedDetailPost.caption ? selectedDetailPost.caption : '(Tanpa caption)'"></div>
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 whitespace-pre-wrap max-h-40 overflow-y-auto" x-text="selectedDetailPost && selectedDetailPost.caption ? selectedDetailPost.caption : '(Tanpa teks utama)'"></div>
+          </div>
+
+          <!-- Bagian Khusus Meta Ads -->
+          <template x-if="selectedDetailPost && (selectedDetailPost.akun_platform === 'Meta Ads' || selectedDetailPost.headline)">
+            <div class="space-y-3 p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-900 block">Parameter Meta Ads</span>
+              <div>
+                <span class="text-[11px] font-semibold text-slate-600 block">Headline:</span>
+                <div class="font-bold text-slate-900 text-xs" x-text="selectedDetailPost.headline || '-'"></div>
+              </div>
+              <div>
+                <span class="text-[11px] font-semibold text-slate-600 block">Deskripsi:</span>
+                <div class="text-slate-700 text-xs" x-text="selectedDetailPost.deskripsi || '-'"></div>
+              </div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-slate-600 font-semibold">Tombol CTA:</span>
+                <span class="px-2 py-0.5 rounded font-bold bg-indigo-600 text-white text-[11px]" x-text="selectedDetailPost.cta_tombol || 'Belanja Sekarang'"></span>
+              </div>
+            </div>
+          </template>
+
+          <!-- Komentar Pertama (Facebook Page) -->
+          <div x-show="selectedDetailPost && selectedDetailPost.komentar_pertama">
+            <span class="text-xs font-bold text-slate-700 block mb-1">Komentar Pertama</span>
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 whitespace-pre-wrap" x-text="selectedDetailPost ? selectedDetailPost.komentar_pertama : ''"></div>
           </div>
 
           <!-- Link Affiliate -->
@@ -926,12 +1085,19 @@
       <p class="text-xs text-slate-500 mb-4">Tentukan akun, produk, tipe media, jadwal tayang, dan tautan affiliate Shopee.</p>
 
       <form @submit.prevent="submitPostForm()" class="space-y-4">
-        <!-- Akun Publisher -->
+        <!-- Akun Publisher & Indikator Platform -->
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Akun *</label>
-          <select x-model="postForm.akun_id" @change="onPostAccountChange()" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold text-slate-700">Pilih Akun *</label>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold uppercase" :class="{
+              'bg-blue-100 text-blue-900': currentPlatform === 'Facebook Page',
+              'bg-purple-100 text-purple-900': currentPlatform === 'Threads',
+              'bg-indigo-100 text-indigo-900': currentPlatform === 'Meta Ads'
+            }" x-text="'Platform: ' + currentPlatform"></span>
+          </div>
+          <select x-model="postForm.akun_id" @change="handlePostAccountChange($event.target.value)" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
             <template x-for="acc in selectableAccounts" :key="acc.id">
-              <option :value="acc.id" x-text="acc.nama_akun + ' (' + acc.platform + ' - Prefix: ' + acc.prefix + ')'"></option>
+              <option :value="acc.id" x-text="acc.nama_akun + ' (' + acc.platform + ' - Tag: ' + acc.prefix + ')'"></option>
             </template>
           </select>
         </div>
@@ -953,7 +1119,7 @@
               <div @click="selectProductItem(p)" @mouseenter="highlightedProductIndex = index" :class="index === highlightedProductIndex ? 'bg-blue-50 text-blue-900' : 'text-slate-700'" class="p-2 flex items-center space-x-3 cursor-pointer hover:bg-blue-50 transition">
                 <div class="w-9 h-9 rounded bg-slate-100 shrink-0 overflow-hidden flex items-center justify-center border border-slate-200">
                   <template x-if="p.cover_url">
-                    <img :src="p.cover_url" class="w-full h-full object-cover">
+                    <img :src="p.cover_url" loading="lazy" class="w-full h-full object-cover">
                   </template>
                   <template x-if="!p.cover_url">
                     <span class="material-symbols-outlined text-slate-400 text-base">inventory_2</span>
@@ -971,61 +1137,6 @@
           </div>
         </div>
 
-        <!-- Tipe Postingan -->
-        <div class="grid grid-cols-3 gap-3">
-          <label class="border border-slate-200 p-3 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'TEKS' ? 'border-blue-900 bg-blue-50/40' : ''">
-            <input type="radio" value="TEKS" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
-            <span class="text-xs font-semibold">Teks Saja</span>
-          </label>
-          <label class="border border-slate-200 p-3 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'FOTO' ? 'border-blue-900 bg-blue-50/40' : ''">
-            <input type="radio" value="FOTO" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
-            <span class="text-xs font-semibold">Album Foto (1-10)</span>
-          </label>
-          <label class="border border-slate-200 p-3 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'VIDEO' ? 'border-blue-900 bg-blue-50/40' : ''">
-            <input type="radio" value="VIDEO" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
-            <span class="text-xs font-semibold">Satu Video Tunggal</span>
-          </label>
-        </div>
-
-        <!-- Pilih Media Produk (Hanya Tipe yang Sesuai) -->
-        <div x-show="postForm.tipe !== 'TEKS'">
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700" x-text="postForm.tipe === 'VIDEO' ? 'Pilih Satu Video' : 'Pilih Foto (Maks 10)'"></label>
-            <span class="text-xs text-slate-500 font-semibold" x-text="selectedMediaCountText"></span>
-          </div>
-          
-          <div x-show="isLoadingPostMedia" class="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
-            Memuat daftar media produk...
-          </div>
-
-          <div x-show="!isLoadingPostMedia && filteredPostMedia.length === 0" class="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
-            Tidak ada media <span x-text="postForm.tipe"></span> pada produk ini. Buka katalog produk untuk mengunggah berkas terkait.
-          </div>
-
-          <div x-show="!isLoadingPostMedia && filteredPostMedia.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-56 overflow-y-auto p-2 border border-slate-200 rounded-lg bg-slate-50">
-            <template x-for="med in filteredPostMedia" :key="med.id">
-              <label class="relative border rounded p-1.5 cursor-pointer flex flex-col items-center bg-white hover:border-blue-900 transition" :class="postForm.media_ids.indexOf(med.id) !== -1 ? 'ring-2 ring-blue-900' : ''">
-                <input type="checkbox" :value="med.id" @change="togglePostMedia(med.id)" :checked="postForm.media_ids.indexOf(med.id) !== -1" class="absolute top-1 left-1 z-10">
-                <div class="w-full aspect-square bg-slate-100 rounded overflow-hidden flex items-center justify-center mb-1">
-                  <template x-if="getMediaFileType(med) === 'FOTO'">
-                    <img :src="med.media_url" loading="lazy" class="w-full h-full object-cover">
-                  </template>
-                  <template x-if="getMediaFileType(med) === 'VIDEO'">
-                    <div x-data="{ videoError: false }" class="w-full h-full flex items-center justify-center bg-black">
-                      <video x-show="!videoError" :src="med.media_url" preload="metadata" muted controls @error="videoError = true" class="w-full h-full object-cover"></video>
-                      <div x-show="videoError" class="flex flex-col items-center justify-center text-slate-400 p-2 text-center">
-                        <span class="material-symbols-outlined text-2xl">videocam_off</span>
-                        <span class="text-[9px]">Gagal muat</span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-                <span class="text-[10px] font-bold" :class="getMediaFileType(med) === 'VIDEO' ? 'text-indigo-600' : 'text-slate-600'" x-text="getMediaFileType(med)"></span>
-              </label>
-            </template>
-          </div>
-        </div>
-
         <!-- Tanggal dan Jam -->
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -1038,11 +1149,11 @@
           </div>
         </div>
 
-        <!-- Manajemen Link Affiliate -->
+        <!-- Manajemen Link Affiliate Shopee / URL Tujuan -->
         <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
           <div class="flex items-center justify-between">
             <div>
-              <span class="text-xs font-bold text-slate-700">Tautan Affiliate Shopee</span>
+              <span class="text-xs font-bold text-slate-700" x-text="currentPlatform === 'Meta Ads' ? 'URL Tujuan Iklan (Otomatis dari Link Affiliate)' : 'Tautan Affiliate Shopee'"></span>
               <div class="text-[11px] text-slate-500">
                 <template x-if="postForm.link_affiliate">
                   <span class="text-emerald-700 font-mono truncate block max-w-sm" x-text="postForm.link_affiliate"></span>
@@ -1055,7 +1166,7 @@
             <button type="button" :disabled="!postForm.produk_id || !postForm.tanggal_rencana || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
               <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
               <span class="material-symbols-outlined text-xs">link</span>
-              <span x-text="postForm.link_affiliate ? 'Ubah Link Affiliate' : 'Tambah Link Affiliate'"></span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
             </button>
           </div>
           <div x-show="postForm.kode_pelacakan" class="text-[11px] text-slate-600 flex items-center space-x-1">
@@ -1064,21 +1175,110 @@
           </div>
         </div>
 
-        <!-- Caption & Emoji Panel -->
+        <!-- ======================================= -->
+        <!-- ISIAN KHUSUS PLATFORM: META ADS         -->
+        <!-- ======================================= -->
+        <template x-if="currentPlatform === 'Meta Ads'">
+          <div class="space-y-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-lg">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-900 block">Parameter Iklan Meta Ads</span>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Headline Iklan *</label>
+              <input type="text" x-model="postForm.headline" required placeholder="Contoh: Diskon Kilat Spesial Hari Ini!" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Deskripsi Ringkas *</label>
+              <input type="text" x-model="postForm.deskripsi" required placeholder="Contoh: Gratis ongkir seluruh Indonesia & jaminan original" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Tombol Call-To-Action (CTA) *</label>
+              <select x-model="postForm.cta_tombol" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+                <option value="Belanja Sekarang">Belanja Sekarang</option>
+                <option value="Beli Sekarang">Beli Sekarang</option>
+                <option value="Pelajari Selengkapnya">Pelajari Selengkapnya</option>
+                <option value="Lihat Selengkapnya">Lihat Selengkapnya</option>
+              </select>
+            </div>
+          </div>
+        </template>
+
+        <!-- ======================================= -->
+        <!-- MEDIA (FACEBOOK PAGE & META ADS)        -->
+        <!-- ======================================= -->
+        <div x-show="currentPlatform !== 'Threads'">
+          <!-- Tipe Postingan -->
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <label class="border border-slate-200 p-2.5 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'TEKS' ? 'border-blue-900 bg-blue-50/40' : ''">
+              <input type="radio" value="TEKS" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
+              <span class="text-xs font-semibold">Teks Saja</span>
+            </label>
+            <label class="border border-slate-200 p-2.5 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'FOTO' ? 'border-blue-900 bg-blue-50/40' : ''">
+              <input type="radio" value="FOTO" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
+              <span class="text-xs font-semibold">Foto (1-10)</span>
+            </label>
+            <label class="border border-slate-200 p-2.5 rounded-lg flex items-center space-x-2 cursor-pointer hover:bg-slate-50" :class="postForm.tipe === 'VIDEO' ? 'border-blue-900 bg-blue-50/40' : ''">
+              <input type="radio" value="VIDEO" x-model="postForm.tipe" @change="onPostTypeChange()" class="text-blue-900">
+              <span class="text-xs font-semibold">Satu Video</span>
+            </label>
+          </div>
+
+          <!-- Pilih Media Produk -->
+          <div x-show="postForm.tipe !== 'TEKS'">
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-bold text-slate-700" x-text="postForm.tipe === 'VIDEO' ? 'Pilih Satu Video' : 'Pilih Foto (Maks 10)'"></label>
+              <span class="text-xs text-slate-500 font-semibold" x-text="selectedMediaCountText"></span>
+            </div>
+            
+            <div x-show="isLoadingPostMedia" class="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
+              Memuat daftar media produk...
+            </div>
+
+            <div x-show="!isLoadingPostMedia && filteredPostMedia.length === 0" class="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded border border-slate-200">
+              Tidak ada media <span x-text="postForm.tipe"></span> pada produk ini. Buka katalog produk untuk mengunggah berkas.
+            </div>
+
+            <div x-show="!isLoadingPostMedia && filteredPostMedia.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-52 overflow-y-auto p-2 border border-slate-200 rounded-lg bg-slate-50">
+              <template x-for="med in filteredPostMedia" :key="med.id">
+                <label class="relative border rounded p-1.5 cursor-pointer flex flex-col items-center bg-white hover:border-blue-900 transition" :class="postForm.media_ids.indexOf(med.id) !== -1 ? 'ring-2 ring-blue-900' : ''">
+                  <input type="checkbox" :value="med.id" @change="togglePostMedia(med.id)" :checked="postForm.media_ids.indexOf(med.id) !== -1" class="absolute top-1 left-1 z-10">
+                  <div class="w-full aspect-square bg-slate-100 rounded overflow-hidden flex items-center justify-center mb-1">
+                    <template x-if="getMediaFileType(med) === 'FOTO'">
+                      <img :src="med.media_url" loading="lazy" class="w-full h-full object-cover">
+                    </template>
+                    <template x-if="getMediaFileType(med) === 'VIDEO'">
+                      <div x-data="{ videoError: false }" class="w-full h-full flex items-center justify-center bg-black">
+                        <video x-show="!videoError" :src="med.media_url" preload="metadata" muted controls @error="videoError = true" class="w-full h-full object-cover"></video>
+                        <div x-show="videoError" class="flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                          <span class="material-symbols-outlined text-2xl">videocam_off</span>
+                          <span class="text-[9px]">Gagal muat</span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                  <span class="text-[10px] font-bold" :class="getMediaFileType(med) === 'VIDEO' ? 'text-indigo-600' : 'text-slate-600'" x-text="getMediaFileType(med)"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Teks Utama (Caption) & Emoji Panel -->
         <div class="relative">
           <div class="flex items-center justify-between mb-1">
             <div class="flex items-center space-x-2">
-              <label class="block text-xs font-bold text-slate-700">Caption Postingan</label>
-              <!-- Tombol Pembuka Panel Emoji -->
+              <label class="block text-xs font-bold text-slate-700">Teks Utama *</label>
               <button type="button" @click="emojiPickerOpen = !emojiPickerOpen" class="text-xs text-slate-600 hover:text-blue-900 font-semibold flex items-center space-x-0.5">
                 <span class="material-symbols-outlined text-sm">mood</span>
                 <span>Emoji</span>
               </button>
             </div>
-            <button type="button" :disabled="!postForm.link_affiliate" @click="insertAffiliateLink()" class="text-[11px] text-blue-900 disabled:text-slate-400 font-semibold hover:underline flex items-center space-x-0.5">
-              <span class="material-symbols-outlined text-xs">add_link</span>
-              <span>Sisipkan Link ke Caption</span>
-            </button>
+            <!-- Penghitung Karakter Khusus Threads -->
+            <div class="flex items-center space-x-2">
+              <span x-show="currentPlatform === 'Threads'" :class="(postForm.caption || '').length > 500 ? 'text-rose-600 font-bold' : 'text-slate-500'" class="text-xs font-mono" x-text="(postForm.caption || '').length + ' / 500 karakter'"></span>
+              <button type="button" :disabled="!postForm.link_affiliate" @click="insertAffiliateLink()" class="text-[11px] text-blue-900 disabled:text-slate-400 font-semibold hover:underline flex items-center space-x-0.5">
+                <span class="material-symbols-outlined text-xs">add_link</span>
+                <span>Sisipkan Link</span>
+              </button>
+            </div>
           </div>
 
           <!-- Panel Pilihan 48+ Emoji Ringan -->
@@ -1125,8 +1325,14 @@
             </div>
           </div>
 
-          <textarea id="postCaptionInput" x-model="postForm.caption" :disabled="postForm.status === 'sudah tayang'" rows="4" placeholder="Tulis caption di sini..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-500"></textarea>
-          <span x-show="postForm.status === 'sudah tayang'" class="text-[11px] text-amber-700 font-medium">Caption dikunci karena konten sudah tayang di Facebook.</span>
+          <textarea id="postCaptionInput" x-model="postForm.caption" :maxlength="currentPlatform === 'Threads' ? 500 : undefined" :disabled="postForm.status === 'sudah tayang'" rows="4" :placeholder="currentPlatform === 'Threads' ? 'Tulis teks utas Threads (maksimal 500 karakter)...' : 'Tulis teks utama di sini...'" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-500"></textarea>
+          <span x-show="postForm.status === 'sudah tayang'" class="text-[11px] text-amber-700 font-medium">Teks utama dikunci karena konten sudah ditandai tayang.</span>
+        </div>
+
+        <!-- Komentar Pertama (Khusus Facebook Page) -->
+        <div x-show="currentPlatform === 'Facebook Page'">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Komentar Pertama (Opsional)</label>
+          <textarea x-model="postForm.komentar_pertama" rows="2" placeholder="Tulis komentar pertama (misal: link alternatif, info promo tambahan)..." class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"></textarea>
         </div>
 
         <div class="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
@@ -1377,15 +1583,31 @@
           has_posts: false
         },
 
-        // Postingan & Workflow State
+        // Tampilan & Paginasi Produk (Server-side)
+        productViewMode: 'grid',
+        newProductBanner: false,
+        productSearchQuery: '',
+        productPage: 1,
+        productTotal: 0,
+        productTotalPages: 1,
+        productDebounceTimer: null,
+        allProducts: [],
+
+        // Postingan & Workflow State (Server-side)
         posts: [],
-        searchQuery: '',
+        postSearchQuery: '',
+        postPage: 1,
+        postTotal: 0,
+        postTotalPages: 1,
+        postDebounceTimer: null,
         filterStatuses: ['draf', 'terjadwal', 'sudah tayang'],
         filterAccount: '',
         filterDateFrom: '',
         filterDateTo: '',
         dateChip: 'all',
         showArchived: false,
+
+        // Post Form State
         postModalOpen: false,
         affiliateLinkModalOpen: false,
         isSavingPost: false,
@@ -1394,6 +1616,7 @@
         postMediaOptions: [],
         tempAffiliateLink: '',
         initialPostFormJson: '',
+        currentSelectedAccountId: '',
 
         // Detail Drawer State
         detailDrawerOpen: false,
@@ -1425,7 +1648,11 @@
           kode_pelacakan: '',
           link_affiliate: '',
           caption: '',
-          status: ''
+          status: '',
+          headline: '',
+          deskripsi: '',
+          cta_tombol: 'Belanja Sekarang',
+          komentar_pertama: ''
         },
         tayangModalOpen: false,
         isSavingTayang: false,
@@ -1449,6 +1676,17 @@
 
         initApp: function() {
           this.loadInitialData();
+        },
+
+        // Pemetaan tampilan status ke huruf kapital di awal kata
+        formatStatus: function(status) {
+          if (!status) return '-';
+          var s = String(status).toLowerCase().trim();
+          if (s === 'draf') return 'Draf';
+          if (s === 'terjadwal') return 'Terjadwal';
+          if (s === 'sudah tayang' || s === 'sudah_tayang') return 'Sudah Tayang';
+          if (s === 'diarsipkan') return 'Diarsipkan';
+          return s.charAt(0).toUpperCase() + s.slice(1);
         },
 
         showToast: function(msg) {
@@ -1475,10 +1713,24 @@
             .withSuccessHandler(function(response) {
               self.isLoading = false;
               if (response && response.success && response.data) {
-                self.products = response.data.products || [];
-                self.posts = response.data.posts || [];
+                self.allProducts = response.data.allProducts || [];
                 self.accounts = response.data.accounts || [];
                 self.settings = Object.assign(self.settings, response.data.settings || {});
+
+                if (response.data.productsPage) {
+                  self.products = response.data.productsPage.items || [];
+                  self.productTotal = response.data.productsPage.total || 0;
+                  self.productPage = response.data.productsPage.page || 1;
+                  self.productTotalPages = response.data.productsPage.totalPages || 1;
+                }
+
+                if (response.data.postsPage) {
+                  self.posts = response.data.postsPage.items || [];
+                  self.postTotal = response.data.postsPage.total || 0;
+                  self.postPage = response.data.postsPage.page || 1;
+                  self.postTotalPages = response.data.postsPage.totalPages || 1;
+                }
+
                 self.extractCategories();
               } else {
                 self.showToast('Gagal memuat data: ' + (response ? response.message : 'Terjadi galat'));
@@ -1493,22 +1745,48 @@
 
         extractCategories: function() {
           var set = {};
-          for (var i = 0; i < this.products.length; i++) {
-            if (this.products[i].kategori) {
-              set[this.products[i].kategori] = true;
+          var source = this.allProducts.length > 0 ? this.allProducts : this.products;
+          for (var i = 0; i < source.length; i++) {
+            if (source[i].kategori) {
+              set[source[i].kategori] = true;
             }
           }
           this.categories = Object.keys(set);
         },
 
-        get filteredProducts() {
-          var q = this.searchQuery.toLowerCase().trim();
-          var cat = this.selectedCategory;
-          return this.products.filter(function(p) {
-            var matchQ = !q || (p.nama && p.nama.toLowerCase().indexOf(q) !== -1) || (p.kode_produk && p.kode_produk.toLowerCase().indexOf(q) !== -1);
-            var matchCat = !cat || p.kategori === cat;
-            return matchQ && matchCat;
-          });
+        // Pencarian Produk Server-side dengan Jeda 300 ms
+        onProductSearchChange: function() {
+          clearTimeout(this.productDebounceTimer);
+          var self = this;
+          this.productDebounceTimer = setTimeout(function() {
+            self.productPage = 1;
+            self.fetchProducts();
+          }, 300);
+        },
+
+        fetchProducts: function() {
+          var self = this;
+          this.isLoading = true;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              self.isLoading = false;
+              if (res && res.success && res.data) {
+                self.products = res.data.items || [];
+                self.productTotal = res.data.total || 0;
+                self.productPage = res.data.page || 1;
+                self.productTotalPages = res.data.totalPages || 1;
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isLoading = false;
+              self.showToast('Gagal mengambil data produk: ' + err.message);
+            })
+            .getProducts({
+              page: this.productPage,
+              pageSize: 25,
+              q: this.productSearchQuery,
+              category: this.selectedCategory
+            });
         },
 
         // --- MANAJEMEN PRODUK ---
@@ -1538,6 +1816,7 @@
 
         submitProductForm: function() {
           var self = this;
+          var isEdit = !!(this.productForm.id && this.productForm.id.trim());
           this.isSavingProduct = true;
           google.script.run
             .withSuccessHandler(function(res) {
@@ -1545,7 +1824,14 @@
               if (res && res.success) {
                 self.productModalOpen = false;
                 self.showToast('Produk berhasil disimpan!');
-                self.loadInitialData();
+                if (!isEdit && res.data && res.data.id) {
+                  self.selectedProduct = res.data;
+                  self.newProductBanner = true;
+                  self.loadProductMedia(res.data.id);
+                  self.fetchProducts();
+                } else {
+                  self.fetchProducts();
+                }
               } else {
                 self.showToast('Gagal menyimpan: ' + res.message);
               }
@@ -1918,6 +2204,16 @@
         },
 
         // --- MANAJEMEN POSTINGAN & WORKFLOW ---
+        get currentAccount() {
+          var self = this;
+          return this.accounts.find(function(a) { return a.id === self.postForm.akun_id; }) || null;
+        },
+
+        get currentPlatform() {
+          var acc = this.currentAccount;
+          return acc ? (acc.platform || 'Facebook Page') : 'Facebook Page';
+        },
+
         get todayScheduledPosts() {
           var todayStr = new Date().toISOString().substring(0, 10);
           return this.posts
@@ -1944,67 +2240,51 @@
           };
         },
 
-        get filteredPosts() {
+        // Pencarian Postingan Server-side dengan Jeda 300 ms
+        onPostSearchChange: function() {
+          clearTimeout(this.postDebounceTimer);
           var self = this;
-          var q = (this.searchQuery || '').toLowerCase().trim();
-          var todayStr = new Date().toISOString().substring(0, 10);
+          this.postDebounceTimer = setTimeout(function() {
+            self.postPage = 1;
+            self.fetchPosts();
+          }, 300);
+        },
 
-          // Hitung batas minggu ini (7 hari ke depan)
-          var nextWeekDate = new Date();
-          nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-          var nextWeekStr = nextWeekDate.toISOString().substring(0, 10);
-
-          var list = this.posts.filter(function(p) {
-            // Filter Arsip
-            if (!self.showArchived && p.status === 'diarsipkan') return false;
-
-            // Filter Status
-            if (self.filterStatuses.length > 0 && self.filterStatuses.indexOf(p.status) === -1) {
-              return false;
-            }
-
-            // Filter Akun
-            if (self.filterAccount && p.akun_id !== self.filterAccount) {
-              return false;
-            }
-
-            // Filter Search Text (kode atau caption)
-            if (q) {
-              var matchCode = p.kode_pelacakan && p.kode_pelacakan.toLowerCase().indexOf(q) !== -1;
-              var matchCap = p.caption && p.caption.toLowerCase().indexOf(q) !== -1;
-              if (!matchCode && !matchCap) return false;
-            }
-
-            // Filter Chip Cepat
-            if (self.dateChip === 'today') {
-              if (p.tanggal_rencana !== todayStr) return false;
-            } else if (self.dateChip === 'this_week') {
-              if (!p.tanggal_rencana || p.tanggal_rencana < todayStr || p.tanggal_rencana > nextWeekStr) return false;
-            }
-
-            // Filter Rentang Tanggal Manual
-            if (self.filterDateFrom && p.tanggal_rencana && p.tanggal_rencana < self.filterDateFrom) return false;
-            if (self.filterDateTo && p.tanggal_rencana && p.tanggal_rencana > self.filterDateTo) return false;
-
-            return true;
-          });
-
-          // Urutan: tanggal & jam naik untuk terjadwal, terbaru di atas untuk lainnya
-          return list.sort(function(a, b) {
-            if (a.status === 'terjadwal' && b.status === 'terjadwal') {
-              var timeA = (a.tanggal_rencana || '') + ' ' + (a.jam_tayang || '');
-              var timeB = (b.tanggal_rencana || '') + ' ' + (b.jam_tayang || '');
-              return timeA.localeCompare(timeB);
-            }
-            if (a.status === 'terjadwal') return -1;
-            if (b.status === 'terjadwal') return 1;
-            return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '');
-          });
+        fetchPosts: function() {
+          var self = this;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.success && res.data) {
+                self.posts = res.data.items || [];
+                self.postTotal = res.data.total || 0;
+                self.postPage = res.data.page || 1;
+                self.postTotalPages = res.data.totalPages || 1;
+                if (self.selectedDetailPost) {
+                  var updated = self.posts.find(function(p) { return p.id === self.selectedDetailPost.id; });
+                  if (updated) self.selectedDetailPost = updated;
+                }
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.showToast('Gagal memuat postingan: ' + err.message);
+            })
+            .getPosts({
+              page: this.postPage,
+              pageSize: 25,
+              q: this.postSearchQuery,
+              status: this.filterStatuses,
+              akun_id: this.filterAccount,
+              dateFrom: this.filterDateFrom,
+              dateTo: this.filterDateTo,
+              dateChip: this.dateChip,
+              showArchived: this.showArchived
+            });
         },
 
         get currentPostProduct() {
           var self = this;
-          return this.products.find(function(p) { return p.id === self.postForm.produk_id; }) || null;
+          var source = this.allProducts.length > 0 ? this.allProducts : this.products;
+          return source.find(function(p) { return p.id === self.postForm.produk_id; }) || null;
         },
 
         get selectableAccounts() {
@@ -2042,8 +2322,9 @@
         // Pencarian Produk di Form Postingan
         get filteredSearchProducts() {
           var q = (this.productSearchInput || '').toLowerCase().trim();
-          if (!q) return this.products;
-          return this.products.filter(function(p) {
+          var source = this.allProducts.length > 0 ? this.allProducts : this.products;
+          if (!q) return source;
+          return source.filter(function(p) {
             return (p.nama && p.nama.toLowerCase().indexOf(q) !== -1) || (p.kode_produk && p.kode_produk.toLowerCase().indexOf(q) !== -1);
           });
         },
@@ -2092,8 +2373,57 @@
           }
         },
 
-        onPostAccountChange: function() {
-          // Akun berubah, reset kode pelacakan form jika baru
+        handlePostAccountChange: function(newAccountId) {
+          var self = this;
+          var oldAcc = this.accounts.find(function(a) { return a.id === self.currentSelectedAccountId; });
+          var newAcc = this.accounts.find(function(a) { return a.id === newAccountId; });
+
+          var oldPlatform = oldAcc ? (oldAcc.platform || 'Facebook Page') : 'Facebook Page';
+          var newPlatform = newAcc ? (newAcc.platform || 'Facebook Page') : 'Facebook Page';
+
+          if (oldAcc && oldPlatform !== newPlatform) {
+            var hasDiscardableContent = false;
+            if (oldPlatform === 'Meta Ads' && (this.postForm.headline || this.postForm.deskripsi)) {
+              hasDiscardableContent = true;
+            }
+            if (oldPlatform === 'Facebook Page' && this.postForm.komentar_pertama) {
+              hasDiscardableContent = true;
+            }
+
+            if (hasDiscardableContent) {
+              this.confirmDialog = {
+                open: true,
+                title: 'Ganti Platform Akun?',
+                buttonText: 'Ganti & Kosongkan',
+                message: 'Akun terpilih memakai platform ' + newPlatform + '. Isian khusus dari platform sebelumnya akan dikosongkan.',
+                action: function() {
+                  self.applyAccountSwitch(newAccountId, newPlatform);
+                }
+              };
+              return;
+            }
+          }
+
+          this.applyAccountSwitch(newAccountId, newPlatform);
+        },
+
+        applyAccountSwitch: function(newAccountId, newPlatform) {
+          this.currentSelectedAccountId = newAccountId;
+          this.postForm.akun_id = newAccountId;
+
+          if (newPlatform !== 'Meta Ads') {
+            this.postForm.headline = '';
+            this.postForm.deskripsi = '';
+            this.postForm.cta_tombol = 'Belanja Sekarang';
+          }
+          if (newPlatform !== 'Facebook Page') {
+            this.postForm.komentar_pertama = '';
+          }
+          if (newPlatform === 'Threads') {
+            this.postForm.tipe = 'TEKS';
+            this.postForm.media_ids = [];
+          }
+
           if (!this.postForm.id) {
             this.postForm.kode_pelacakan = '';
           }
@@ -2114,9 +2444,11 @@
 
         openPostModal: function() {
           var firstActiveAccount = this.accounts.find(function(a) { return a.aktif; });
+          var accId = firstActiveAccount ? firstActiveAccount.id : '';
+          this.currentSelectedAccountId = accId;
           this.postForm = {
             id: '',
-            akun_id: firstActiveAccount ? firstActiveAccount.id : '',
+            akun_id: accId,
             produk_id: '',
             tipe: 'TEKS',
             media_ids: [],
@@ -2125,7 +2457,11 @@
             kode_pelacakan: '',
             link_affiliate: '',
             caption: '',
-            status: 'draf'
+            status: 'draf',
+            headline: '',
+            deskripsi: '',
+            cta_tombol: 'Belanja Sekarang',
+            komentar_pertama: ''
           };
           this.productSearchInput = '';
           this.productDropdownOpen = false;
@@ -2136,9 +2472,11 @@
         },
 
         editPost: function(post) {
+          var accId = post.akun_id || (this.accounts.length > 0 ? this.accounts[0].id : '');
+          this.currentSelectedAccountId = accId;
           this.postForm = {
             id: post.id,
-            akun_id: post.akun_id || (this.accounts.length > 0 ? this.accounts[0].id : ''),
+            akun_id: accId,
             produk_id: post.produk_id,
             tipe: post.tipe || 'TEKS',
             media_ids: Array.isArray(post.media_ids) ? post.media_ids.slice() : [],
@@ -2147,9 +2485,14 @@
             kode_pelacakan: post.kode_pelacakan || '',
             link_affiliate: post.link_affiliate || '',
             caption: post.caption || '',
-            status: post.status || 'draf'
+            status: post.status || 'draf',
+            headline: post.headline || '',
+            deskripsi: post.deskripsi || '',
+            cta_tombol: post.cta_tombol || 'Belanja Sekarang',
+            komentar_pertama: post.komentar_pertama || ''
           };
-          var prod = this.products.find(function(p) { return p.id === post.produk_id; });
+          var source = this.allProducts.length > 0 ? this.allProducts : this.products;
+          var prod = source.find(function(p) { return p.id === post.produk_id; });
           this.productSearchInput = prod ? prod.kode_produk + ' - ' + prod.nama : '';
           this.productDropdownOpen = false;
           this.emojiPickerOpen = false;
@@ -2309,18 +2652,7 @@
         },
 
         refreshPosts: function() {
-          var self = this;
-          google.script.run
-            .withSuccessHandler(function(res) {
-              if (res && res.success) {
-                self.posts = res.data || [];
-                if (self.selectedDetailPost) {
-                  var updated = self.posts.find(function(p) { return p.id === self.selectedDetailPost.id; });
-                  if (updated) self.selectedDetailPost = updated;
-                }
-              }
-            })
-            .getPosts();
+          this.fetchPosts();
         },
 
         canSchedulePost: function(p) {
@@ -2408,7 +2740,9 @@
               if (res && res.success && res.data) {
                 self.detailDrawerOpen = false;
                 self.postForm = res.data;
-                var prod = self.products.find(function(p) { return p.id === res.data.produk_id; });
+                self.currentSelectedAccountId = res.data.akun_id;
+                var source = self.allProducts.length > 0 ? self.allProducts : self.products;
+                var prod = source.find(function(p) { return p.id === res.data.produk_id; });
                 self.productSearchInput = prod ? prod.kode_produk + ' - ' + prod.nama : '';
                 self.initialPostFormJson = JSON.stringify(self.postForm);
                 self.postModalOpen = true;

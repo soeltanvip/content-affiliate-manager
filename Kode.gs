@@ -30,7 +30,7 @@ function setupDatabase() {
     },
     {
       name: 'postingan',
-      headers: ['id', 'produk_id', 'media_ids', 'tipe', 'tanggal_rencana', 'jam_tayang', 'kode_pelacakan', 'link_affiliate', 'caption', 'status', 'url_postingan', 'created_at', 'updated_at', 'akun_id']
+      headers: ['id', 'produk_id', 'media_ids', 'tipe', 'tanggal_rencana', 'jam_tayang', 'kode_pelacakan', 'link_affiliate', 'caption', 'status', 'url_postingan', 'created_at', 'updated_at', 'akun_id', 'headline', 'deskripsi', 'cta_tombol', 'komentar_pertama']
     }
   ];
 
@@ -217,16 +217,21 @@ function getInitialData() {
   try {
     setupDatabase(); // Pastikan lembar kerja ada
     const settings = getSettingsInternal();
-    const products = getProductsInternal();
-    const posts = getPostsInternal();
+    const allProducts = getProductsInternal();
     const accounts = getAccountsInternal();
+    const pRes = getProducts({ page: 1, pageSize: 25 });
+    const postRes = getPosts({ page: 1, pageSize: 25, status: ['draf', 'terjadwal', 'sudah tayang'] });
+
     return {
       success: true,
       data: serializeForClient({
         settings: settings,
-        products: products,
-        accounts: accounts,
-        posts: posts
+        allProducts: allProducts.map(function(p) {
+          return { id: p.id, kode_produk: p.kode_produk, nama: p.nama, cover_url: p.cover_url, link_dashboard: p.link_dashboard };
+        }),
+        productsPage: pRes.data,
+        postsPage: postRes.data,
+        accounts: accounts
       })
     };
   } catch (err) {
@@ -278,9 +283,42 @@ function getProductsInternal() {
   return products;
 }
 
-function getProducts() {
+function getProducts(params) {
   try {
-    return { success: true, data: serializeForClient(getProductsInternal()) };
+    params = params || {};
+    const all = getProductsInternal();
+    const q = String(params.q || '').toLowerCase().trim();
+    const cat = String(params.category || '').trim();
+
+    let filtered = all;
+    if (q) {
+      filtered = filtered.filter(function(p) {
+        return (p.nama && p.nama.toLowerCase().indexOf(q) !== -1) ||
+               (p.kode_produk && p.kode_produk.toLowerCase().indexOf(q) !== -1);
+      });
+    }
+    if (cat) {
+      filtered = filtered.filter(function(p) {
+        return p.kategori === cat;
+      });
+    }
+
+    const total = filtered.length;
+    const page = Math.max(1, parseInt(params.page, 10) || 1);
+    const pageSize = Math.max(1, parseInt(params.pageSize, 10) || 25);
+    const start = (page - 1) * pageSize;
+    const items = filtered.slice(start, start + pageSize);
+
+    return {
+      success: true,
+      data: serializeForClient({
+        items: items,
+        total: total,
+        page: page,
+        pageSize: pageSize,
+        totalPages: Math.ceil(total / pageSize) || 1
+      })
+    };
   } catch (err) {
     return { success: false, message: err.message };
   }
@@ -333,7 +371,17 @@ function saveProduct(payload) {
     ]);
 
     invalidateProductCache();
-    return { success: true, data: { id: newId }, message: 'Produk berhasil ditambahkan.' };
+    const createdProd = {
+      id: newId,
+      kode_produk: payload.kode_produk,
+      nama: payload.nama,
+      kategori: payload.kategori || '',
+      cover_url: payload.cover_url || '',
+      link_dashboard: payload.link_dashboard || '',
+      created_at: nowStr,
+      media_count: 0
+    };
+    return { success: true, data: serializeForClient(createdProd), message: 'Produk berhasil ditambahkan.' };
   } catch (err) {
     return { success: false, message: 'Gagal menyimpan: ' + err.message };
   } finally {
@@ -997,6 +1045,7 @@ function getPostsInternal() {
     for (let a = 1; a < aData.length; a++) {
       akunMap[String(aData[a][0])] = {
         nama: String(aData[a][1] || ''),
+        platform: String(aData[a][2] || 'Facebook Page'),
         prefix: String(aData[a][3] || ''),
         batas: parseInt(aData[a][4], 10) || 3
       };
@@ -1010,7 +1059,7 @@ function getPostsInternal() {
     const pid = String(row[1] || '');
     const prodInfo = prodMap[pid] || { kode: '-', nama: 'Produk Tidak Ditemukan' };
     const aid = String(row[13] || '');
-    const accInfo = akunMap[aid] || { nama: '-', prefix: '-', batas: 3 };
+    const accInfo = akunMap[aid] || { nama: '-', prefix: '-', platform: 'Facebook Page', batas: 3 };
 
     let tgl = row[4];
     if (tgl instanceof Date) {
@@ -1034,6 +1083,7 @@ function getPostsInternal() {
       akun_id: aid,
       akun_nama: accInfo.nama,
       akun_prefix: accInfo.prefix,
+      akun_platform: accInfo.platform,
       media_ids: String(row[2] || '').split(',').filter(function(x) { return x.trim() !== ''; }),
       tipe: String(row[3] || 'TEKS'),
       tanggal_rencana: tgl,
@@ -1044,15 +1094,80 @@ function getPostsInternal() {
       status: String(row[9] || 'draf'),
       url_postingan: String(row[10] || ''),
       created_at: row[11] instanceof Date ? row[11].toISOString() : String(row[11] || ''),
-      updated_at: row[12] instanceof Date ? row[12].toISOString() : String(row[12] || '')
+      updated_at: row[12] instanceof Date ? row[12].toISOString() : String(row[12] || ''),
+      headline: String(row[14] || ''),
+      deskripsi: String(row[15] || ''),
+      cta_tombol: String(row[16] || ''),
+      komentar_pertama: String(row[17] || '')
     });
   }
   return posts;
 }
 
-function getPosts() {
+function getPosts(params) {
   try {
-    return { success: true, data: serializeForClient(getPostsInternal()) };
+    params = params || {};
+    const all = getPostsInternal();
+    const q = String(params.q || '').toLowerCase().trim();
+    const akunId = String(params.akun_id || '').trim();
+    const showArchived = params.showArchived === true || String(params.showArchived) === 'true';
+    const statuses = Array.isArray(params.status) ? params.status : (params.status ? [params.status] : []);
+    const dateFrom = String(params.dateFrom || '').trim();
+    const dateTo = String(params.dateTo || '').trim();
+    const dateChip = String(params.dateChip || '').trim();
+
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const nextWeekDate = new Date();
+    nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+    const nextWeekStr = nextWeekDate.toISOString().substring(0, 10);
+
+    let filtered = all.filter(function(p) {
+      if (!showArchived && p.status === 'diarsipkan') return false;
+      if (statuses.length > 0 && statuses.indexOf(p.status) === -1) return false;
+      if (akunId && p.akun_id !== akunId) return false;
+      if (q) {
+        const matchCode = p.kode_pelacakan && p.kode_pelacakan.toLowerCase().indexOf(q) !== -1;
+        const matchCap = p.caption && p.caption.toLowerCase().indexOf(q) !== -1;
+        const matchHead = p.headline && p.headline.toLowerCase().indexOf(q) !== -1;
+        if (!matchCode && !matchCap && !matchHead) return false;
+      }
+      if (dateChip === 'today') {
+        if (p.tanggal_rencana !== todayStr) return false;
+      } else if (dateChip === 'this_week') {
+        if (!p.tanggal_rencana || p.tanggal_rencana < todayStr || p.tanggal_rencana > nextWeekStr) return false;
+      }
+      if (dateFrom && p.tanggal_rencana && p.tanggal_rencana < dateFrom) return false;
+      if (dateTo && p.tanggal_rencana && p.tanggal_rencana > dateTo) return false;
+      return true;
+    });
+
+    filtered.sort(function(a, b) {
+      if (a.status === 'terjadwal' && b.status === 'terjadwal') {
+        const timeA = (a.tanggal_rencana || '') + ' ' + (a.jam_tayang || '');
+        const timeB = (b.tanggal_rencana || '') + ' ' + (b.jam_tayang || '');
+        return timeA.localeCompare(timeB);
+      }
+      if (a.status === 'terjadwal') return -1;
+      if (b.status === 'terjadwal') return 1;
+      return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '');
+    });
+
+    const total = filtered.length;
+    const page = Math.max(1, parseInt(params.page, 10) || 1);
+    const pageSize = Math.max(1, parseInt(params.pageSize, 10) || 25);
+    const start = (page - 1) * pageSize;
+    const items = filtered.slice(start, start + pageSize);
+
+    return {
+      success: true,
+      data: serializeForClient({
+        items: items,
+        total: total,
+        page: page,
+        pageSize: pageSize,
+        totalPages: Math.ceil(total / pageSize) || 1
+      })
+    };
   } catch (err) {
     return { success: false, message: err.message };
   }
@@ -1223,12 +1338,44 @@ function savePost(payload) {
     if (!payload.produk_id) {
       return { success: false, message: 'Pilih produk terlebih dahulu.' };
     }
+    if (!payload.caption || !String(payload.caption).trim()) {
+      return { success: false, message: 'Teks utama wajib diisi.' };
+    }
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let sheet = ss.getSheetByName('postingan');
     if (!sheet) {
       setupDatabase();
       sheet = ss.getSheetByName('postingan');
+    }
+
+    let platform = 'Facebook Page';
+    if (payload.akun_id) {
+      const akunSheet = ss.getSheetByName('akun');
+      if (akunSheet) {
+        const aData = akunSheet.getDataRange().getValues();
+        for (let a = 1; a < aData.length; a++) {
+          if (String(aData[a][0]) === String(payload.akun_id)) {
+            platform = String(aData[a][2] || 'Facebook Page');
+            break;
+          }
+        }
+      }
+    }
+
+    if (platform === 'Meta Ads') {
+      if (!payload.headline || !String(payload.headline).trim()) {
+        return { success: false, message: 'Headline wajib diisi untuk Meta Ads.' };
+      }
+      if (!payload.deskripsi || !String(payload.deskripsi).trim()) {
+        return { success: false, message: 'Deskripsi wajib diisi untuk Meta Ads.' };
+      }
+    }
+
+    if (platform === 'Threads') {
+      if (String(payload.caption || '').length > 500) {
+        return { success: false, message: 'Teks Threads maksimal 500 karakter.' };
+      }
     }
 
     // Validasi Media Terpilih
@@ -1253,9 +1400,9 @@ function savePost(payload) {
       }
     }
 
-    // Aturan Facebook: Jangan campur foto & video
+    // Aturan Facebook & Platform: Jangan campur foto & video
     if (photoCount > 0 && videoCount > 0) {
-      return { success: false, message: 'Di Facebook, foto dan video harus dipisah menjadi dua postingan.' };
+      return { success: false, message: 'Foto dan video harus dipisah menjadi postingan berbeda.' };
     }
 
     if (payload.tipe === 'TEKS' && (photoCount > 0 || videoCount > 0)) {
@@ -1349,6 +1496,12 @@ function savePost(payload) {
         if (payload.akun_id) {
           sheet.getRange(rowIndex, 14).setValue(payload.akun_id);
         }
+        sheet.getRange(rowIndex, 15, 1, 4).setValues([[
+          payload.headline || '',
+          payload.deskripsi || '',
+          payload.cta_tombol || 'Belanja Sekarang',
+          payload.komentar_pertama || ''
+        ]]);
 
         return {
           success: true,
@@ -1388,7 +1541,11 @@ function savePost(payload) {
       '', // url_postingan
       nowStr,
       nowStr,
-      payload.akun_id || ''
+      payload.akun_id || '',
+      payload.headline || '',
+      payload.deskripsi || '',
+      payload.cta_tombol || 'Belanja Sekarang',
+      payload.komentar_pertama || ''
     ]);
 
     return {
@@ -1585,7 +1742,11 @@ function duplicatePost(postId) {
         kode_pelacakan: '',
         tanggal_rencana: '',
         jam_tayang: '',
-        status: 'draf'
+        status: 'draf',
+        headline: target.headline || '',
+        deskripsi: target.deskripsi || '',
+        cta_tombol: target.cta_tombol || 'Belanja Sekarang',
+        komentar_pertama: target.komentar_pertama || ''
       })
     };
   } catch (err) {
