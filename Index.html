@@ -1134,12 +1134,38 @@
                     <span class="material-symbols-outlined text-slate-400 text-base">inventory_2</span>
                   </template>
                 </div>
-                <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-xs truncate" x-text="p.nama"></div>
-                  <div class="text-[10px] text-slate-400 font-mono" x-text="p.kode_produk"></div>
-                </div>
+            <div x-show="filteredSearchProducts.length === 0" class="p-3 text-center text-xs text-slate-400">
+              Produk tidak ditemukan.
+            </div>
+          </div>
+        </div>
+
+        <!-- Manajemen Link Affiliate Shopee / URL Tujuan -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700" x-text="currentPlatform === 'Meta Ads' ? 'URL Tujuan Iklan (Otomatis dari Link Affiliate)' : 'Tautan Affiliate Shopee'"></span>
+              <div class="text-[11px] text-slate-500">
+                <template x-if="postForm.link_affiliate">
+                  <span class="text-emerald-700 font-mono truncate block max-w-sm" x-text="postForm.link_affiliate"></span>
+                </template>
+                <template x-if="!postForm.link_affiliate">
+                  <span class="text-slate-400">Belum ada link affiliate yang tersimpan di draf ini.</span>
+                </template>
               </div>
-            </template>
+            </div>
+            <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
+            </button>
+          </div>
+          <div x-show="postForm.kode_pelacakan" class="text-[11px] text-slate-600 flex items-center space-x-1">
+            <span>Kode pelacakan draf:</span>
+            <span class="font-mono font-bold text-blue-900" x-text="postForm.kode_pelacakan"></span>
+          </div>
+        </div>
+=======
             <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
               <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
               <span class="material-symbols-outlined text-xs">link</span>
@@ -1171,6 +1197,50 @@
             <span class="font-mono font-bold text-blue-900" x-text="postForm.kode_pelacakan"></span>
           </div>
         </div>
+
+        <!-- ======================================= -->
+        <!-- ISIAN KHUSUS PLATFORM: META ADS         -->
+=======
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-xs truncate" x-text="p.nama"></div>
+                  <div class="text-[10px] text-slate-400 font-mono" x-text="p.kode_produk"></div>
+                </div>
+              </div>
+            </template>
+            <div x-show="filteredSearchProducts.length === 0" class="p-3 text-center text-xs text-slate-400">
+              Produk tidak ditemukan.
+            </div>
+          </div>
+        </div>
+
+        <!-- Manajemen Link Affiliate Shopee / URL Tujuan -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700" x-text="currentPlatform === 'Meta Ads' ? 'URL Tujuan Iklan (Otomatis dari Link Affiliate)' : 'Tautan Affiliate Shopee'"></span>
+              <div class="text-[11px] text-slate-500">
+                <template x-if="postForm.link_affiliate">
+                  <span class="text-emerald-700 font-mono truncate block max-w-sm" x-text="postForm.link_affiliate"></span>
+                </template>
+                <template x-if="!postForm.link_affiliate">
+                  <span class="text-slate-400">Belum ada link affiliate yang tersimpan di draf ini.</span>
+                </template>
+              </div>
+            </div>
+            <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
+            </button>
+          </div>
+          <div x-show="postForm.kode_pelacakan" class="text-[11px] text-slate-600 flex items-center space-x-1">
+            <span>Kode pelacakan draf:</span>
+            <span class="font-mono font-bold text-blue-900" x-text="postForm.kode_pelacakan"></span>
+          </div>
+        </div>
+
+        <!-- ======================================= -->
+        <!-- ISIAN KHUSUS PLATFORM: META ADS         -->
 =======
             <div x-show="filteredSearchProducts.length === 0" class="p-3 text-center text-xs text-slate-400">
               Produk tidak ditemukan.
