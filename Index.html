@@ -1142,18 +1142,20 @@
           </div>
         </div>
 
-        <!-- Tanggal dan Jam (Jam disembunyikan untuk Draf) -->
-        <div class="grid gap-3" :class="postForm.status === 'terjadwal' ? 'grid-cols-2' : 'grid-cols-1'">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">Tanggal Rencana Tayang *</label>
-            <input type="date" x-model="postForm.tanggal_rencana" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-          </div>
-          <!-- Jam hanya tampil jika status Terjadwal -->
-          <div x-show="postForm.status === 'terjadwal'">
-            <label class="block text-xs font-bold text-slate-700 mb-1">Jam Tayang (WIB) *</label>
-            <input type="time" x-model="postForm.jam_tayang" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-          </div>
-        </div>
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+            <button type="button" :disabled="!postForm.produk_id || !postForm.tanggal_rencana || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
+            </button>
+=======
+            <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
+            </button>
 
         <!-- Manajemen Link Affiliate Shopee / URL Tujuan -->
         <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
@@ -1410,6 +1412,45 @@
   </div>
 
   <!-- ============================================== -->
+  <!-- MODAL: JADWALKAN POSTINGAN                     -->
+  <!-- ============================================== -->
+  <div x-show="scheduleModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full border border-slate-200 p-6 shadow-xl relative">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2 text-blue-900">
+          <span class="material-symbols-outlined text-2xl">event_upcoming</span>
+          <h3 class="text-base font-bold text-slate-900">Jadwalkan Postingan</h3>
+        </div>
+        <button type="button" :disabled="isSchedulingPost" @click="scheduleModalOpen = false" class="text-slate-400 hover:text-slate-600 disabled:opacity-30">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">Tentukan tanggal dan jam tayang postingan.</p>
+
+      <form @submit.prevent="submitScheduleForm()" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Tanggal Rencana Tayang *</label>
+          <input type="date" x-model="scheduleForm.tanggal_rencana" :min="todayWib" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Jam Tayang (WIB) - Opsional</label>
+          <input type="time" x-model="scheduleForm.jam_tayang" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+          <span class="text-[11px] text-slate-400">Kosongkan jika ingin sistem memilih jam otomatis sesuai slot akun dan kuota.</span>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+          <button type="button" @click="scheduleModalOpen = false" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded">Batal</button>
+          <button type="submit" :disabled="isSchedulingPost" class="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded flex items-center space-x-1">
+            <span x-show="isSchedulingPost" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            <span>Jadwalkan Konten</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
   <!-- MODAL: TANDAI SUDAH TAYANG (INPUT FB URL)      -->
   <!-- ============================================== -->
   <div x-show="tayangModalOpen" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
@@ -1582,6 +1623,8 @@
         uploadProgressPercent: 0,
         uploadStatusText: '',
 
+        todayWib: '',
+
         // Akun Management State
         accountModalOpen: false,
         isSavingAccount: false,
@@ -1667,6 +1710,13 @@
           cta_tombol: 'Belanja Sekarang',
           komentar_pertama: ''
         },
+        scheduleModalOpen: false,
+        isSchedulingPost: false,
+        schedulePostTarget: null,
+        scheduleForm: {
+          tanggal_rencana: '',
+          jam_tayang: ''
+        },
         tayangModalOpen: false,
         isSavingTayang: false,
         tayangPostId: '',
@@ -1735,6 +1785,7 @@
                 self.allProducts = response.data.allProducts || [];
                 self.accounts = response.data.accounts || [];
                 self.settings = Object.assign(self.settings, response.data.settings || {});
+                self.todayWib = response.data.todayWib || '';
 
                 if (response.data.productsPage) {
                   self.products = response.data.productsPage.items || [];
@@ -2236,7 +2287,7 @@
         },
 
         get todayScheduledPosts() {
-          var todayStr = new Date().toISOString().substring(0, 10);
+          var todayStr = this.todayWib;
           return this.posts
             .filter(function(p) { return p.status === 'terjadwal' && p.tanggal_rencana === todayStr; })
             .sort(function(a, b) { return (a.jam_tayang || '').localeCompare(b.jam_tayang || ''); });
@@ -2244,7 +2295,7 @@
 
         get dailyQuotaInfo() {
           if (!this.filterAccount) return null;
-          var targetDate = this.filterDateFrom || new Date().toISOString().substring(0, 10);
+          var targetDate = this.filterDateFrom || this.todayWib;
           var acc = this.accounts.find(function(a) { return a.id === this.filterAccount; }.bind(this));
           if (!acc) return null;
 
@@ -2473,7 +2524,7 @@
             produk_id: '',
             tipe: 'TEKS',
             media_ids: [],
-            tanggal_rencana: new Date().toISOString().substring(0, 10),
+            tanggal_rencana: '',
             jam_tayang: '',
             kode_pelacakan: '',
             link_affiliate: '',
@@ -2547,57 +2598,52 @@
 
         openAffiliateLinkModal: function() {
           var self = this;
-          if (!this.postForm.produk_id || !this.postForm.tanggal_rencana || !this.postForm.akun_id) {
-            this.showToast('Pilih akun, produk, dan tanggal rencana terlebih dahulu.');
+          if (!this.postForm.produk_id || !this.postForm.akun_id) {
+            this.showToast('Pilih akun dan produk terlebih dahulu.');
             return;
           }
-          this.tempAffiliateLink = this.postForm.link_affiliate || '';
 
-          if (!this.postForm.kode_pelacakan) {
-            this.isLoadingTrackingCode = true;
-            if (this.postForm.id) {
-              google.script.run
-                .withSuccessHandler(function(res) {
-                  self.isLoadingTrackingCode = false;
-                  if (res && res.success && res.data && res.data.code) {
-                    self.postForm.kode_pelacakan = res.data.code;
-                    self.affiliateLinkModalOpen = true;
-                    self.refreshPosts();
-                  } else {
-                    self.showToast('Gagal menetapkan kode: ' + (res ? res.message : 'Terjadi kesalahan'));
-                  }
-                })
-                .withFailureHandler(function(err) {
-                  self.isLoadingTrackingCode = false;
-                  self.showToast('Galat server: ' + err.message);
-                })
-                .assignTrackingCode(this.postForm.id);
-            } else {
-              google.script.run
-                .withSuccessHandler(function(res) {
-                  self.isLoadingTrackingCode = false;
-                  if (res && res.success && res.data && res.data.code) {
-                    self.postForm.kode_pelacakan = res.data.code;
-                    self.affiliateLinkModalOpen = true;
-                  } else {
-                    self.showToast('Gagal membuat kode: ' + (res ? res.message : 'Terjadi kesalahan'));
-                  }
-                })
-                .withFailureHandler(function(err) {
-                  self.isLoadingTrackingCode = false;
-                  self.showToast('Galat server: ' + err.message);
-                })
-                .getNextTrackingCode(this.postForm.akun_id, this.postForm.tanggal_rencana);
-            }
-          } else {
-            this.affiliateLinkModalOpen = true;
-          }
+          this.isLoadingTrackingCode = true;
+          google.script.run
+            .withSuccessHandler(function(res) {
+              self.isLoadingTrackingCode = false;
+              if (res && res.success && res.data) {
+                self.postForm.id = res.data.postId;
+                self.postForm.kode_pelacakan = res.data.code;
+                self.tempAffiliateLink = res.data.link || self.postForm.link_affiliate || '';
+                self.affiliateLinkModalOpen = true;
+                self.refreshPosts();
+              } else {
+                self.showToast('Gagal: ' + (res ? res.message : 'Terjadi galat'));
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.isLoadingTrackingCode = false;
+              self.showToast('Galat server: ' + err.message);
+            })
+            .prepareTrackingCodeForPost(this.postForm.id, this.postForm);
         },
 
         saveAffiliateLinkFromModal: function() {
-          this.postForm.link_affiliate = this.tempAffiliateLink ? this.tempAffiliateLink.trim() : '';
-          this.affiliateLinkModalOpen = false;
-          this.showToast('Link affiliate disimpan di form.');
+          var self = this;
+          var link = this.tempAffiliateLink ? this.tempAffiliateLink.trim() : '';
+          if (!this.postForm.id) return;
+
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.success) {
+                self.postForm.link_affiliate = link;
+                self.affiliateLinkModalOpen = false;
+                self.showToast('Link affiliate berhasil disimpan!');
+                self.refreshPosts();
+              } else {
+                self.showToast('Gagal menyimpan: ' + (res ? res.message : 'Galat'));
+              }
+            })
+            .withFailureHandler(function(err) {
+              self.showToast('Galat: ' + err.message);
+            })
+            .saveAffiliateLink(this.postForm.id, link);
         },
 
         onPostProductChange: function() {
@@ -2684,42 +2730,55 @@
         canSchedulePost: function(p) {
           if (!p) return false;
           if (!p.akun_id) return false;
-          if (!p.produk_id || !p.tanggal_rencana) return false;
-          if (!p.caption || !p.caption.trim()) return false;
-          if (!p.link_affiliate || !p.link_affiliate.trim()) return false;
+          if (!p.produk_id) return false;
+          if (!p.caption || !String(p.caption).trim()) return false;
+          if (!p.link_affiliate || !String(p.link_affiliate).trim()) return false;
+          if (!p.kode_pelacakan || !String(p.kode_pelacakan).trim()) return false;
           if (p.tipe === 'VIDEO' && (!p.media_ids || p.media_ids.length !== 1)) return false;
           if (p.tipe === 'FOTO' && (!p.media_ids || p.media_ids.length < 1 || p.media_ids.length > 10)) return false;
           return true;
         },
 
         jadwalkanPost: function(post) {
-          var self = this;
-          if (!post.akun_id) {
-            this.showToast('Pilih akun terlebih dahulu sebelum menjadwalkan.');
-            return;
-          }
           if (!this.canSchedulePost(post)) {
-            this.showToast('Lengkapi produk, media, tanggal rencana, caption, dan link affiliate.');
+            this.showToast('Syarat menjadwalkan: wajib ada caption, link affiliate, dan kode pelacakan.');
             return;
           }
+          this.schedulePostTarget = post;
+          this.scheduleForm = {
+            tanggal_rencana: post.tanggal_rencana || this.todayWib,
+            jam_tayang: post.jam_tayang || ''
+          };
+          this.scheduleModalOpen = true;
+        },
 
-          // Jika jam tayang masih kosong, panggil server untuk mencari slot otomatis
-          if (!post.jam_tayang || !String(post.jam_tayang).trim()) {
-            this.showToast('Mencari slot jam tayang otomatis...');
+        submitScheduleForm: function() {
+          var self = this;
+          var target = this.schedulePostTarget;
+          if (!target) return;
+
+          var tgl = this.scheduleForm.tanggal_rencana || this.todayWib;
+          var jam = this.scheduleForm.jam_tayang ? this.scheduleForm.jam_tayang.trim() : '';
+
+          if (!jam) {
+            // Server memilih jam otomatis
+            this.isSchedulingPost = true;
             google.script.run
               .withSuccessHandler(function(slotRes) {
+                self.isSchedulingPost = false;
                 if (slotRes && slotRes.success && slotRes.data) {
                   var chosenDate = slotRes.data.tanggal_rencana;
                   var chosenJam = slotRes.data.jam_tayang;
                   var accName = slotRes.data.account_name || 'Akun';
 
+                  self.scheduleModalOpen = false;
                   self.confirmDialog = {
                     open: true,
-                    title: 'Konfirmasi Jadwal Otomatis',
+                    title: 'Konfirmasi Jam Otomatis',
                     buttonText: 'Jadwalkan',
-                    message: 'Slot jadwal tayang yang dipilih untuk ' + accName + ' adalah tanggal ' + chosenDate + ' jam ' + chosenJam + ' WIB. Lanjutkan?',
+                    message: 'Slot jadwal tayang otomatis terpilih untuk ' + accName + ' adalah tanggal ' + chosenDate + ' jam ' + chosenJam + ' WIB. Simpan jadwal ini?',
                     action: function() {
-                      self.executeSchedule(post.id, chosenDate, chosenJam, post.akun_id);
+                      self.executeSchedule(target.id, chosenDate, chosenJam, target.akun_id);
                     }
                   };
                 } else {
@@ -2727,22 +2786,16 @@
                 }
               })
               .withFailureHandler(function(err) {
+                self.isSchedulingPost = false;
                 self.showToast('Galat server: ' + err.message);
               })
-              .findAvailableScheduleSlot(post.akun_id, post.tanggal_rencana);
+              .findAvailableScheduleSlot(target.akun_id, tgl);
             return;
           }
 
-          // Jika jam sudah ada, konfirmasi sebelum menyimpan
-          this.confirmDialog = {
-            open: true,
-            title: 'Jadwalkan Konten?',
-            buttonText: 'Jadwalkan',
-            message: 'Postingan akan dijadwalkan pada ' + post.tanggal_rencana + ' jam ' + post.jam_tayang + ' WIB.',
-            action: function() {
-              self.executeSchedule(post.id, post.tanggal_rencana, post.jam_tayang, post.akun_id);
-            }
-          };
+          // User mengisi jam manual
+          this.scheduleModalOpen = false;
+          this.executeSchedule(target.id, tgl, jam, target.akun_id);
         },
 
         executeSchedule: function(postId, tanggal, jam, akunId) {
