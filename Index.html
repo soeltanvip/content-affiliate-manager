@@ -490,19 +490,19 @@
           <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg w-fit text-xs font-semibold">
             <button type="button" @click="statusChip = 'draf'; postPage = 1; fetchPosts()" :class="statusChip === 'draf' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
               <span>Draf</span>
-              <span :class="statusChip === 'draf' ? 'bg-slate-200 text-slate-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.draf"></span>
+              <span :class="statusChip === 'draf' ? 'bg-slate-200 text-slate-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="$data.postCounts ? $data.postCounts.draf : 0"></span>
             </button>
             <button type="button" @click="statusChip = 'terjadwal'; postPage = 1; fetchPosts()" :class="statusChip === 'terjadwal' ? 'bg-white shadow text-blue-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
               <span>Terjadwal</span>
-              <span :class="statusChip === 'terjadwal' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.terjadwal"></span>
+              <span :class="statusChip === 'terjadwal' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="$data.postCounts ? $data.postCounts.terjadwal : 0"></span>
             </button>
             <button type="button" @click="statusChip = 'terbit'; postPage = 1; fetchPosts()" :class="statusChip === 'terbit' ? 'bg-white shadow text-emerald-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
               <span>Terbit</span>
-              <span :class="statusChip === 'terbit' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.terbit"></span>
+              <span :class="statusChip === 'terbit' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="$data.postCounts ? $data.postCounts.terbit : 0"></span>
             </button>
             <button type="button" @click="statusChip = 'semua'; postPage = 1; fetchPosts()" :class="statusChip === 'semua' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
               <span>Semua</span>
-              <span :class="statusChip === 'semua' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.semua"></span>
+              <span :class="statusChip === 'semua' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="$data.postCounts ? $data.postCounts.semua : 0"></span>
             </button>
           </div>
 
@@ -601,33 +601,38 @@
                   </div>
                 </td>
                 <td class="p-3 text-right" @click.stop>
-                  <div class="inline-flex items-center space-x-1">
-                    <!-- Tombol Jadwalkan (khusus draf) -->
-                    <button x-show="p.status === 'draf'" :disabled="!canSchedulePost(p)" @click="openScheduleModal(p)" :class="canSchedulePost(p) ? 'text-indigo-700 hover:bg-indigo-50' : 'text-slate-300 cursor-not-allowed'" class="p-1.5 rounded" title="Jadwalkan Konten">
-                      <span class="material-symbols-outlined text-base">event_upcoming</span>
-                    </button>
-                    <!-- Tombol Tandai Sudah Tayang (khusus terjadwal) -->
-                    <button x-show="p.status === 'terjadwal'" @click="openTayangModal(p)" class="p-1.5 hover:bg-emerald-50 rounded text-emerald-700" title="Tandai Sudah Tayang">
-                      <span class="material-symbols-outlined text-base">check_circle</span>
-                    </button>
-                    <!-- Tombol Buka Postingan Facebook (khusus terbit) -->
-                    <template x-if="isPostPublished(p)">
-                      <a :href="p.url_postingan" target="_blank" rel="noopener" class="p-1.5 hover:bg-blue-50 rounded text-blue-900" title="Buka Postingan Terbit">
-                        <span class="material-symbols-outlined text-base">open_in_new</span>
-                      </a>
-                    </template>
-                    <!-- Tombol Ubah (disembunyikan untuk konten terbit) -->
-                    <button x-show="!isPostPublished(p)" @click="editPost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Ubah Postingan">
-                      <span class="material-symbols-outlined text-base">edit</span>
-                    </button>
-                    <!-- Tombol Duplikasi -->
-                    <button @click="confirmDuplicatePost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Duplikasi Postingan (Buat Draf Baru)">
-                      <span class="material-symbols-outlined text-base">content_copy</span>
-                    </button>
-                    <!-- Tombol Arsip -->
-                    <button x-show="p.status !== 'diarsipkan'" @click="confirmArchivePost(p)" class="p-1.5 hover:bg-rose-50 rounded text-rose-600" title="Arsipkan">
-                      <span class="material-symbols-outlined text-base">archive</span>
-                    </button>
+                  <div class="inline-flex items-center">
+                    <div class="inline-flex items-center space-x-1">
+                      <!-- Tombol Jadwalkan (khusus draf) -->
+                      <button x-show="p.status === 'draf'" :disabled="!canSchedulePost(p)" @click="openScheduleModal(p)" :class="canSchedulePost(p) ? 'text-indigo-700 hover:bg-indigo-50' : 'text-slate-300 cursor-not-allowed'" class="p-1.5 rounded" :title="getScheduleTooltip(p)">
+                        <span class="material-symbols-outlined text-base">event_upcoming</span>
+                      </button>
+                      <!-- Tombol Tandai Sudah Tayang (khusus terjadwal) -->
+                      <button x-show="p.status === 'terjadwal'" @click="openTayangModal(p)" class="p-1.5 hover:bg-emerald-50 rounded text-emerald-700" title="Tandai sudah tayang">
+                        <span class="material-symbols-outlined text-base">check_circle</span>
+                      </button>
+                      <!-- Tombol Buka Postingan Facebook (khusus terbit) -->
+                      <template x-if="isPostPublished(p)">
+                        <a :href="p.url_postingan" target="_blank" rel="noopener" class="p-1.5 hover:bg-blue-50 rounded text-blue-900" title="Buka postingan">
+                          <span class="material-symbols-outlined text-base">open_in_new</span>
+                        </a>
+                      </template>
+                      <!-- Tombol Ubah (disembunyikan untuk konten terbit) -->
+                      <button x-show="!isPostPublished(p)" @click="editPost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Edit postingan">
+                        <span class="material-symbols-outlined text-base">edit</span>
+                      </button>
+                      <!-- Tombol Duplikasi -->
+                      <button @click="confirmDuplicatePost(p)" class="p-1.5 hover:bg-slate-100 rounded text-slate-600" title="Duplikasi postingan">
+                        <span class="material-symbols-outlined text-base">content_copy</span>
+                      </button>
+                    </div>
+                    <!-- Pemisah dan Tombol Arsip -->
+                    <div x-show="p.status !== 'diarsipkan'" class="inline-flex items-center">
+                      <span class="w-px h-4 bg-slate-200 ml-2 mr-2" aria-hidden="true"></span>
+                      <button @click="confirmArchivePost(p)" class="p-1.5 hover:bg-rose-50 rounded text-rose-600" title="Arsipkan postingan">
+                        <span class="material-symbols-outlined text-base">archive</span>
+                      </button>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -1055,11 +1060,69 @@
 
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Berkas (Foto / Video) *</label>
-          <input type="file" id="batchFileInput" multiple accept="image/*,video/*" @change="onFilesSelected($event)" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-900 hover:file:bg-blue-100">
-          <div class="text-[11px] text-slate-400 mt-1" x-text="selectedFiles.length + ' berkas dipilih.'"></div>
+          
+          <!-- Area Dropzone / Pilih Berkas -->
+          <div 
+            @dragover.prevent="isDragging = true" 
+            @dragleave.prevent="isDragging = false" 
+            @drop.prevent="handleFileDrop($event)" 
+            @click="$refs.batchFileInput.click()"
+            :class="isDragging ? 'border-blue-900 bg-blue-50/50' : 'border-slate-300 hover:border-blue-900 bg-slate-50/50'"
+            class="border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition">
+            <input type="file" x-ref="batchFileInput" id="batchFileInput" multiple accept="image/*,video/*" @change="onFilesSelected($event)" class="hidden">
+            <span class="material-symbols-outlined text-3xl text-slate-400 mb-1">cloud_upload</span>
+            <p class="text-xs text-slate-600 font-medium">Seret file ke sini atau klik untuk memilih</p>
+            <button type="button" @click.stop="$refs.batchFileInput.click()" :disabled="isUploadingMedia" class="mt-2.5 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-blue-900 text-xs font-semibold rounded shadow-sm">Pilih File</button>
+          </div>
+
+          <!-- Keterangan Format & Batas Ukuran -->
+          <div class="text-[11px] text-slate-400 mt-1.5 flex flex-wrap items-center justify-between gap-1">
+            <span>Format: JPG, PNG, WEBP, MP4, MOV, WEBM</span>
+            <span>Batas: Foto maks 10MB, Video maks 100MB</span>
+          </div>
+
+          <!-- Daftar File Terpilih -->
+          <div x-show="selectedFiles.length > 0" class="mt-3 space-y-2">
+            <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span x-text="selectedFiles.length + ' berkas dipilih'"></span>
+              <button type="button" x-show="!isUploadingMedia" @click="selectedFiles = []" class="text-[11px] text-rose-600 hover:underline">Hapus Semua</button>
+            </div>
+            
+            <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+              <template x-for="(item, idx) in selectedFiles" :key="idx">
+                <div class="p-2 bg-slate-50 border border-slate-200 rounded-md text-xs space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center space-x-2 min-w-0 flex-1">
+                      <span class="material-symbols-outlined text-sm text-slate-400 shrink-0" x-text="item.file.type.indexOf('video') !== -1 ? 'videocam' : 'image'"></span>
+                      <span class="font-medium text-slate-800 truncate" x-text="item.file.name"></span>
+                      <span class="text-[10px] text-slate-400 shrink-0" x-text="formatFileSize(item.file.size)"></span>
+                    </div>
+                    <div class="flex items-center space-x-2 shrink-0">
+                      <span x-show="item.status === 'uploading'" class="text-[11px] font-semibold text-blue-900" x-text="'Mengunggah... ' + item.progress + '%'"></span>
+                      <span x-show="item.status === 'done'" class="text-[11px] font-semibold text-emerald-600 flex items-center space-x-0.5">
+                        <span class="material-symbols-outlined text-xs">check_circle</span>
+                        <span>Selesai</span>
+                      </span>
+                      <span x-show="item.status === 'failed'" class="text-[11px] font-semibold text-rose-600 flex items-center space-x-0.5">
+                        <span class="material-symbols-outlined text-xs">error</span>
+                        <span>Gagal</span>
+                      </span>
+                      <button type="button" x-show="!isUploadingMedia" @click="removeSelectedFile(idx)" class="text-slate-400 hover:text-rose-600 p-0.5 rounded" title="Hapus">
+                        <span class="material-symbols-outlined text-xs">close</span>
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Progress Bar Tiap File -->
+                  <div x-show="item.status === 'uploading'" class="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+                    <div class="bg-blue-900 h-1 rounded-full transition-all duration-150" :style="'width: ' + item.progress + '%'"></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
 
-        <!-- Progress Bar Saat Mengunggah -->
+        <!-- Progress Bar Total Saat Mengunggah -->
         <div x-show="isUploadingMedia" class="space-y-1">
           <div class="flex justify-between text-xs font-bold text-slate-600">
             <span x-text="uploadStatusText"></span>
@@ -1074,7 +1137,7 @@
           <button type="button" :disabled="isUploadingMedia" @click="batchModalOpen = false" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg">Batal</button>
           <button type="submit" :disabled="isUploadingMedia || selectedFiles.length === 0" class="px-4 py-2 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center space-x-1">
             <span x-show="isUploadingMedia" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-            <span>Mulai Unggah</span>
+            <span x-text="isUploadingMedia ? 'Mengunggah...' : 'Mulai Unggah'"></span>
           </button>
         </div>
       </form>
@@ -1627,6 +1690,7 @@
 
         // Form Batch Media State
         batchModalOpen: false,
+        isDragging: false,
         batchForm: {
           batchNama: '',
           contentType: 'ORI',
@@ -1664,7 +1728,6 @@
         // Postingan & Workflow State (Server-side)
         todayWIB: '',
         posts: [],
-        postCounts: { draf: 0, terjadwal: 0, terbit: 0, semua: 0 },
         postSearchQuery: '',
         postPage: 1,
         postTotal: 0,
@@ -1815,9 +1878,6 @@
                   self.postTotal = response.data.postsPage.total || 0;
                   self.postPage = response.data.postsPage.page || 1;
                   self.postTotalPages = response.data.postsPage.totalPages || 1;
-                  if (response.data.postsPage.counts) {
-                    self.postCounts = response.data.postsPage.counts;
-                  }
                 }
 
                 self.extractCategories();
@@ -2352,9 +2412,6 @@
                 self.postTotal = res.data.total || 0;
                 self.postPage = res.data.page || 1;
                 self.postTotalPages = res.data.totalPages || 1;
-                if (res.data.counts) {
-                  self.postCounts = res.data.counts;
-                }
                 if (self.selectedDetailPost) {
                   var updated = self.posts.find(function(p) { return p.id === self.selectedDetailPost.id; });
                   if (updated) self.selectedDetailPost = updated;
@@ -2777,6 +2834,19 @@
           if (p.tipe === 'VIDEO' && (!p.media_ids || p.media_ids.length !== 1)) return false;
           if (p.tipe === 'FOTO' && (!p.media_ids || p.media_ids.length < 1 || p.media_ids.length > 10)) return false;
           return true;
+        },
+
+        getScheduleTooltip: function(p) {
+          if (!p) return 'Jadwalkan postingan';
+          if (this.canSchedulePost(p)) return 'Jadwalkan postingan';
+          if (p.tebar_post_id) return 'Sudah dikirim ke Tebar';
+          if (!p.link_affiliate || !p.link_affiliate.trim()) return 'Perlu link affiliate dulu';
+          if (!p.caption || !p.caption.trim()) return 'Perlu teks caption dulu';
+          if (!p.akun_id) return 'Pilih akun dulu';
+          if (!p.produk_id) return 'Pilih produk dulu';
+          if (p.tipe === 'VIDEO' && (!p.media_ids || p.media_ids.length !== 1)) return 'Pilih 1 video dulu';
+          if (p.tipe === 'FOTO' && (!p.media_ids || p.media_ids.length < 1 || p.media_ids.length > 10)) return 'Pilih 1-10 foto dulu';
+          return 'Lengkapi data postingan dulu';
         },
 
         openScheduleModal: function(post) {
