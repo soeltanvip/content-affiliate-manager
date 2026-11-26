@@ -7,6 +7,150 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+// Endpoint webhook n8n untuk integrasi Tebar
+function doPost(e) {
+  try {
+    let body = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        body = JSON.parse(e.postData.contents);
+      } catch (pe) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Invalid JSON body' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    const scriptProps = PropertiesService.getScriptProperties();
+    const expectedToken = scriptProps.getProperty('N8N_TOKEN');
+    if (!expectedToken || String(body.token || '') !== expectedToken) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'unauthorized' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const action = String(body.action || '').trim();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
+
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const sheet = ss.getSheetByName('postingan');
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Sheet postingan tidak ditemukan' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const data = sheet.getDataRange().getValues();
+      const nowWib = getNowWIBString();
+
+      if (action === 'setTebarInfo') {
+        const postId = String(body.post_id || '').trim();
+        if (!postId) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'post_id wajib diisi' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        let rowIndex = -1;
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][0]) === postId) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+
+        if (rowIndex === -1) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Postingan tidak ditemukan' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        sheet.getRange(rowIndex, 19, 1, 3).setValues([[
+          String(body.tebar_post_id || ''),
+          String(body.tebar_status || ''),
+          String(body.tebar_error || '')
+        ]]);
+        sheet.getRange(rowIndex, 13).setValue(nowWib);
+        invalidateProductCache();
+
+        return ContentService.createTextOutput(JSON.stringify({ success: true, message: 'Info Tebar berhasil diperbarui' }))
+          .setMimeType(ContentService.MimeType.JSON);
+
+      } else if (action === 'markPublished') {
+        const tebarPostId = String(body.tebar_post_id || '').trim();
+        const permalink = String(body.permalink || '').trim();
+
+        if (!tebarPostId) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'tebar_post_id wajib diisi' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        if (!permalink) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'permalink wajib diisi' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        let rowIndex = -1;
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][18]) === tebarPostId) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+
+        if (rowIndex === -1) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Postingan dengan tebar_post_id tersebut tidak ditemukan' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        sheet.getRange(rowIndex, 10).setValue('sudah tayang');
+        sheet.getRange(rowIndex, 11).setValue(permalink);
+        sheet.getRange(rowIndex, 13).setValue(nowWib);
+        sheet.getRange(rowIndex, 20).setValue('published');
+        sheet.getRange(rowIndex, 21).setValue('');
+        invalidateProductCache();
+
+        return ContentService.createTextOutput(JSON.stringify({ success: true, message: 'Postingan ditandai sudah tayang (published)' }))
+          .setMimeType(ContentService.MimeType.JSON);
+
+      } else if (action === 'markFailed') {
+        const tebarPostId = String(body.tebar_post_id || '').trim();
+        if (!tebarPostId) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'tebar_post_id wajib diisi' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        let rowIndex = -1;
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][18]) === tebarPostId) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+
+        if (rowIndex === -1) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Postingan dengan tebar_post_id tersebut tidak ditemukan' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        const errText = (String(body.error_code || '') + ' ' + String(body.error_message || '')).trim();
+        sheet.getRange(rowIndex, 13).setValue(nowWib);
+        sheet.getRange(rowIndex, 20).setValue('failed');
+        sheet.getRange(rowIndex, 21).setValue(errText);
+        invalidateProductCache();
+
+        return ContentService.createTextOutput(JSON.stringify({ success: true, message: 'Status tebar ditandai failed' }))
+          .setMimeType(ContentService.MimeType.JSON);
+
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Aksi tidak dikenali: ' + action }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: 'Galat server: ' + err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 // Inisialisasi dan sinkronisasi struktur basis data
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -26,11 +170,11 @@ function setupDatabase() {
     },
     {
       name: 'akun',
-      headers: ['id', 'nama_akun', 'platform', 'prefix', 'batas_harian', 'aktif', 'created_at', 'slot_jam']
+      headers: ['id', 'nama_akun', 'platform', 'prefix', 'batas_harian', 'aktif', 'created_at', 'slot_jam', 'tebar_account_id']
     },
     {
       name: 'postingan',
-      headers: ['id', 'produk_id', 'media_ids', 'tipe', 'tanggal_rencana', 'jam_tayang', 'kode_pelacakan', 'link_affiliate', 'caption', 'status', 'url_postingan', 'created_at', 'updated_at', 'akun_id', 'headline', 'deskripsi', 'cta_tombol', 'komentar_pertama']
+      headers: ['id', 'produk_id', 'media_ids', 'tipe', 'tanggal_rencana', 'jam_tayang', 'kode_pelacakan', 'link_affiliate', 'caption', 'status', 'url_postingan', 'created_at', 'updated_at', 'akun_id', 'headline', 'deskripsi', 'cta_tombol', 'komentar_pertama', 'tebar_post_id', 'tebar_status', 'tebar_error']
     },
     {
       name: 'urutan_kode',
@@ -42,6 +186,9 @@ function setupDatabase() {
     let sheet = ss.getSheetByName(tbl.name);
     if (!sheet) {
       sheet = ss.insertSheet(tbl.name);
+    }
+    if (sheet.getMaxColumns() < tbl.headers.length) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), tbl.headers.length - sheet.getMaxColumns());
     }
     // Update atau set header baris pertama
     sheet.getRange(1, 1, 1, tbl.headers.length).setValues([tbl.headers]);
@@ -923,6 +1070,7 @@ function getAccountsInternal() {
       aktif: row[5] === true || String(row[5]).toLowerCase() === 'true',
       created_at: row[6] instanceof Date ? row[6].toISOString() : String(row[6] || ''),
       slot_jam: String(row[7] || '08:00, 12:00, 19:00'),
+      tebar_account_id: String(row[8] || ''),
       has_posts: (postUsage[accId] || 0) > 0
     });
   }
@@ -989,6 +1137,7 @@ function saveAccount(payload) {
           aktifVal
         ]]);
         sheet.getRange(rowIndex, 8).setValue(cleanSlotJam);
+        sheet.getRange(rowIndex, 9).setValue(String(payload.tebar_account_id || '').trim());
 
         return { success: true, message: 'Akun berhasil diperbarui.' };
       }
@@ -1004,7 +1153,8 @@ function saveAccount(payload) {
       parseInt(payload.batas_harian, 10) || 3,
       payload.aktif !== false && String(payload.aktif) !== 'false',
       nowStr,
-      String(payload.slot_jam || '08:00, 12:00, 19:00').trim()
+      String(payload.slot_jam || '08:00, 12:00, 19:00').trim(),
+      String(payload.tebar_account_id || '').trim()
     ]);
 
     return { success: true, message: 'Akun berhasil ditambahkan.' };
@@ -1135,7 +1285,10 @@ function getPostsInternal() {
       headline: String(row[14] || ''),
       deskripsi: String(row[15] || ''),
       cta_tombol: String(row[16] || ''),
-      komentar_pertama: String(row[17] || '')
+      komentar_pertama: String(row[17] || ''),
+      tebar_post_id: String(row[18] || ''),
+      tebar_status: String(row[19] || ''),
+      tebar_error: String(row[20] || '')
     });
   }
   return posts;
@@ -1442,7 +1595,10 @@ function getOrGeneratePostTrackingCode(postId, akunId, draftPayload) {
         p.headline || '',
         p.deskripsi || '',
         p.cta_tombol || 'Belanja Sekarang',
-        p.komentar_pertama || ''
+        p.komentar_pertama || '',
+        '', // tebar_post_id
+        '', // tebar_status
+        ''  // tebar_error
       ]);
       return { success: true, data: { id: newId, code: newCode, isNew: true } };
     }
@@ -1602,16 +1758,25 @@ function savePost(payload) {
       if (rowIndex !== -1) {
         const existingStatus = String(existingRow[9] || 'draf');
         const existingFbUrl = String(existingRow[10] || '').trim();
+        const existingTebarPostId = String(existingRow[18] || '').trim();
 
         // Tolak perubahan jika postingan sudah terbit (hanya-baca)
         if ((existingStatus === 'sudah tayang' || existingStatus === 'sudah_tayang') && existingFbUrl) {
           return { success: false, message: 'Postingan yang sudah terbit bersifat hanya-baca dan tidak dapat diubah.' };
         }
 
+        // Jika tebar_post_id sudah terisi, kunci tanggal, jam, akun, caption, media
+        if (existingTebarPostId) {
+          finalMediaIds = String(existingRow[2] || '');
+          finalTipe = String(existingRow[3] || 'TEKS');
+          payload.akun_id = String(existingRow[13] || '');
+          payload.caption = String(existingRow[8] || '');
+        }
+
         // Server mengosongkan tanggal dan jam jika status draf
-        let tglVal = payload.tanggal_rencana || '';
-        let jamVal = payload.jam_tayang || '';
-        if (existingStatus === 'draf') {
+        let tglVal = existingTebarPostId ? String(existingRow[4] || '') : (payload.tanggal_rencana || '');
+        let jamVal = existingTebarPostId ? String(existingRow[5] || '') : (payload.jam_tayang || '');
+        if (existingStatus === 'draf' && !existingTebarPostId) {
           tglVal = '';
           jamVal = '';
         }
@@ -1719,7 +1884,10 @@ function savePost(payload) {
       finalHeadline,
       finalDeskripsi,
       finalCta,
-      finalKomentar
+      finalKomentar,
+      '', // tebar_post_id
+      '', // tebar_status
+      ''  // tebar_error
     ]);
     invalidateProductCache();
 
@@ -1942,7 +2110,10 @@ function duplicatePost(postId) {
         headline: target.headline || '',
         deskripsi: target.deskripsi || '',
         cta_tombol: target.cta_tombol || 'Belanja Sekarang',
-        komentar_pertama: target.komentar_pertama || ''
+        komentar_pertama: target.komentar_pertama || '',
+        tebar_post_id: '',
+        tebar_status: '',
+        tebar_error: ''
       })
     };
   } catch (err) {
