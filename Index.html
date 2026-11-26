@@ -488,10 +488,22 @@
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <!-- Chip Status: Draf (Default), Terjadwal, Terbit, Semua -->
           <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg w-fit text-xs font-semibold">
-            <button type="button" @click="statusChip = 'draf'; postPage = 1; fetchPosts()" :class="statusChip === 'draf' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Draf</button>
-            <button type="button" @click="statusChip = 'terjadwal'; postPage = 1; fetchPosts()" :class="statusChip === 'terjadwal' ? 'bg-white shadow text-indigo-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Terjadwal</button>
-            <button type="button" @click="statusChip = 'terbit'; postPage = 1; fetchPosts()" :class="statusChip === 'terbit' ? 'bg-white shadow text-emerald-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Terbit</button>
-            <button type="button" @click="statusChip = 'semua'; postPage = 1; fetchPosts()" :class="statusChip === 'semua' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="px-3 py-1.5 rounded transition">Semua</button>
+            <button type="button" @click="statusChip = 'draf'; postPage = 1; fetchPosts()" :class="statusChip === 'draf' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
+              <span>Draf</span>
+              <span :class="statusChip === 'draf' ? 'bg-slate-200 text-slate-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.draf"></span>
+            </button>
+            <button type="button" @click="statusChip = 'terjadwal'; postPage = 1; fetchPosts()" :class="statusChip === 'terjadwal' ? 'bg-white shadow text-blue-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
+              <span>Terjadwal</span>
+              <span :class="statusChip === 'terjadwal' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.terjadwal"></span>
+            </button>
+            <button type="button" @click="statusChip = 'terbit'; postPage = 1; fetchPosts()" :class="statusChip === 'terbit' ? 'bg-white shadow text-emerald-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
+              <span>Terbit</span>
+              <span :class="statusChip === 'terbit' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.terbit"></span>
+            </button>
+            <button type="button" @click="statusChip = 'semua'; postPage = 1; fetchPosts()" :class="statusChip === 'semua' ? 'bg-white shadow text-slate-900' : 'text-slate-600 hover:text-slate-900'" class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded transition">
+              <span>Semua</span>
+              <span :class="statusChip === 'semua' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600'" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" x-text="postCounts.semua"></span>
+            </button>
           </div>
 
           <!-- Search Bar -->
@@ -576,13 +588,16 @@
                 </td>
                 <td class="p-3">
                   <div class="flex flex-col items-start gap-1">
-                    <span :class="{
-                      'bg-slate-100 text-slate-700': p.status === 'draf',
-                      'bg-indigo-100 text-indigo-800': p.status === 'terjadwal',
-                      'bg-emerald-100 text-emerald-800': p.status === 'sudah tayang',
-                      'bg-rose-100 text-rose-800': p.status === 'diarsipkan'
-                    }" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="formatStatus(p.status)"></span>
-                    <span x-show="p.status === 'draf'" :class="p.link_affiliate ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-500 bg-slate-50 border-slate-200'" class="text-[10px] px-1.5 py-0.5 rounded border font-medium" x-text="p.link_affiliate ? 'Ada link' : 'Belum ada link'"></span>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span :class="{
+                        'bg-slate-100 text-slate-700': p.status === 'draf',
+                        'bg-blue-100 text-blue-800': p.status === 'terjadwal',
+                        'bg-emerald-100 text-emerald-800': p.status === 'sudah tayang',
+                        'bg-rose-100 text-rose-800': p.status === 'diarsipkan'
+                      }" class="px-2 py-0.5 rounded font-semibold text-[11px]" x-text="formatStatus(p.status)"></span>
+                      <span x-show="p.tanggal_rencana && p.tanggal_rencana < todayWIB && (p.status === 'draf' || p.status === 'terjadwal')" class="bg-rose-100 text-rose-800 text-[10px] font-semibold px-1.5 py-0.5 rounded">Lewat jadwal</span>
+                    </div>
+                    <span x-show="!p.link_affiliate || !p.link_affiliate.trim()" class="text-[10px] text-amber-600 font-medium">Perlu link</span>
                   </div>
                 </td>
                 <td class="p-3 text-right" @click.stop>
@@ -1649,6 +1664,7 @@
         // Postingan & Workflow State (Server-side)
         todayWIB: '',
         posts: [],
+        postCounts: { draf: 0, terjadwal: 0, terbit: 0, semua: 0 },
         postSearchQuery: '',
         postPage: 1,
         postTotal: 0,
@@ -1799,6 +1815,9 @@
                   self.postTotal = response.data.postsPage.total || 0;
                   self.postPage = response.data.postsPage.page || 1;
                   self.postTotalPages = response.data.postsPage.totalPages || 1;
+                  if (response.data.postsPage.counts) {
+                    self.postCounts = response.data.postsPage.counts;
+                  }
                 }
 
                 self.extractCategories();
@@ -2333,6 +2352,9 @@
                 self.postTotal = res.data.total || 0;
                 self.postPage = res.data.page || 1;
                 self.postTotalPages = res.data.totalPages || 1;
+                if (res.data.counts) {
+                  self.postCounts = res.data.counts;
+                }
                 if (self.selectedDetailPost) {
                   var updated = self.posts.find(function(p) { return p.id === self.selectedDetailPost.id; });
                   if (updated) self.selectedDetailPost = updated;

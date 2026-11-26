@@ -477,7 +477,8 @@ function getProducts(params) {
         total: total,
         page: page,
         pageSize: pageSize,
-        totalPages: Math.ceil(total / pageSize) || 1
+        totalPages: Math.ceil(total / pageSize) || 1,
+        counts: counts
       })
     };
   } catch (err) {
@@ -1304,6 +1305,21 @@ function getPosts(params) {
     let statusChip = String(params.statusChip || '').toLowerCase().trim();
     if (!statusChip) {
       statusChip = 'draf';
+    }
+
+    const counts = { draf: 0, terjadwal: 0, terbit: 0, semua: 0 };
+    for (let i = 0; i < all.length; i++) {
+      const st = String(all[i].status || '').toLowerCase().trim();
+      if (st !== 'diarsipkan') {
+        counts.semua++;
+        if (st === 'draf') {
+          counts.draf++;
+        } else if (st === 'terjadwal') {
+          counts.terjadwal++;
+        } else if (st === 'sudah tayang' || st === 'sudah_tayang' || st === 'terbit' || st === 'published') {
+          counts.terbit++;
+        }
+      }
     }
 
     let statuses = [];
