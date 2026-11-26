@@ -543,14 +543,16 @@
           </label>
 
           <!-- Indikator Kuota Harian (Muncul jika akun & tanggal terdeteksi) -->
-          <div x-show="dailyQuotaInfo" class="flex items-center space-x-2">
-            <span class="text-slate-500">Kuota Akun Terpilih:</span>
-            <span :class="{
-              'bg-emerald-100 text-emerald-800 border-emerald-200': !dailyQuotaInfo.isNear && !dailyQuotaInfo.isFull,
-              'bg-amber-100 text-amber-800 border-amber-200': dailyQuotaInfo.isNear && !dailyQuotaInfo.isFull,
-              'bg-rose-100 text-rose-800 border-rose-200': dailyQuotaInfo.isFull
-            }" class="px-2 py-0.5 rounded font-bold border" x-text="dailyQuotaInfo.count + ' dari ' + dailyQuotaInfo.limit + ' kuota harian'"></span>
-          </div>
+          <template x-if="dailyQuotaInfo">
+            <div class="flex items-center space-x-2">
+              <span class="text-slate-500">Kuota Akun Terpilih:</span>
+              <span :class="{
+                'bg-emerald-100 text-emerald-800 border-emerald-200': !dailyQuotaInfo.isNear && !dailyQuotaInfo.isFull,
+                'bg-amber-100 text-amber-800 border-amber-200': dailyQuotaInfo.isNear && !dailyQuotaInfo.isFull,
+                'bg-rose-100 text-rose-800 border-rose-200': dailyQuotaInfo.isFull
+              }" class="px-2 py-0.5 rounded font-bold border" x-text="dailyQuotaInfo.count + ' dari ' + dailyQuotaInfo.limit + ' kuota harian'"></span>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -813,40 +815,42 @@
         </div>
 
         <!-- Tombol Aksi Bawah Drawer -->
-        <div class="p-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50" x-show="selectedDetailPost">
-          <div class="flex items-center space-x-2">
-            <!-- Tombol Ubah disembunyikan untuk postingan yang sudah terbit -->
-            <button type="button" x-show="!isPostPublished(selectedDetailPost)" @click="editPostFromDetail()" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
-              <span class="material-symbols-outlined text-sm">edit</span>
-              <span>Ubah</span>
-            </button>
-            <button type="button" @click="confirmDuplicatePost(selectedDetailPost)" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
-              <span class="material-symbols-outlined text-sm">content_copy</span>
-              <span>Duplikasi</span>
-            </button>
-            <button type="button" x-show="selectedDetailPost.status !== 'diarsipkan' && !isPostPublished(selectedDetailPost)" @click="confirmArchivePost(selectedDetailPost)" class="px-3 py-1.5 text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-lg flex items-center space-x-1">
-              <span class="material-symbols-outlined text-sm">archive</span>
-              <span>Arsipkan</span>
-            </button>
-          </div>
+        <template x-if="selectedDetailPost">
+          <div class="p-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50">
+            <div class="flex items-center space-x-2">
+              <!-- Tombol Ubah disembunyikan untuk postingan yang sudah terbit -->
+              <button type="button" x-show="!isPostPublished(selectedDetailPost)" @click="editPostFromDetail()" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
+                <span class="material-symbols-outlined text-sm">edit</span>
+                <span>Ubah</span>
+              </button>
+              <button type="button" @click="confirmDuplicatePost(selectedDetailPost)" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold rounded-lg flex items-center space-x-1">
+                <span class="material-symbols-outlined text-sm">content_copy</span>
+                <span>Duplikasi</span>
+              </button>
+              <button type="button" x-show="selectedDetailPost && selectedDetailPost.status !== 'diarsipkan' && !isPostPublished(selectedDetailPost)" @click="confirmArchivePost(selectedDetailPost)" class="px-3 py-1.5 text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-lg flex items-center space-x-1">
+                <span class="material-symbols-outlined text-sm">archive</span>
+                <span>Arsipkan</span>
+              </button>
+            </div>
 
-          <div class="flex items-center space-x-2">
-            <template x-if="isPostPublished(selectedDetailPost)">
-              <a :href="selectedDetailPost.url_postingan" target="_blank" rel="noopener" class="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
-                <span class="material-symbols-outlined text-sm">open_in_new</span>
-                <span>Buka Postingan Terbit</span>
-              </a>
-            </template>
-            <button type="button" x-show="selectedDetailPost.status === 'draf'" :disabled="!canSchedulePost(selectedDetailPost)" @click="jadwalkanPost(selectedDetailPost)" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
-              <span class="material-symbols-outlined text-sm">event_upcoming</span>
-              <span>Jadwalkan</span>
-            </button>
-            <button type="button" x-show="selectedDetailPost.status === 'terjadwal'" @click="openTayangModal(selectedDetailPost)" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
-              <span class="material-symbols-outlined text-sm">check_circle</span>
-              <span>Tandai Terbit</span>
-            </button>
+            <div class="flex items-center space-x-2">
+              <template x-if="isPostPublished(selectedDetailPost)">
+                <a :href="selectedDetailPost ? selectedDetailPost.url_postingan : '#'" target="_blank" rel="noopener" class="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
+                  <span class="material-symbols-outlined text-sm">open_in_new</span>
+                  <span>Buka Postingan Terbit</span>
+                </a>
+              </template>
+              <button type="button" x-show="selectedDetailPost && selectedDetailPost.status === 'draf'" :disabled="!canSchedulePost(selectedDetailPost)" @click="jadwalkanPost(selectedDetailPost)" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
+                <span class="material-symbols-outlined text-sm">event_upcoming</span>
+                <span>Jadwalkan</span>
+              </button>
+              <button type="button" x-show="selectedDetailPost && selectedDetailPost.status === 'terjadwal'" @click="openTayangModal(selectedDetailPost)" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center space-x-1">
+                <span class="material-symbols-outlined text-sm">check_circle</span>
+                <span>Tandai Terbit</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -1136,20 +1140,69 @@
                 </div>
               </div>
             </template>
+            <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
+            </button>
+
+        <!-- Manajemen Link Affiliate Shopee / URL Tujuan -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700" x-text="currentPlatform === 'Meta Ads' ? 'URL Tujuan Iklan (Otomatis dari Link Affiliate)' : 'Tautan Affiliate Shopee'"></span>
+              <div class="text-[11px] text-slate-500">
+                <template x-if="postForm.link_affiliate">
+                  <span class="text-emerald-700 font-mono truncate block max-w-sm" x-text="postForm.link_affiliate"></span>
+                </template>
+                <template x-if="!postForm.link_affiliate">
+                  <span class="text-slate-400">Belum ada link affiliate yang tersimpan di draf ini.</span>
+                </template>
+              </div>
+            </div>
+            <button type="button" :disabled="!postForm.produk_id || !postForm.tanggal_rencana || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+              <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
+              <span class="material-symbols-outlined text-xs">link</span>
+              <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
+            </button>
+          </div>
+          <div x-show="postForm.kode_pelacakan" class="text-[11px] text-slate-600 flex items-center space-x-1">
+            <span>Kode pelacakan draf:</span>
+            <span class="font-mono font-bold text-blue-900" x-text="postForm.kode_pelacakan"></span>
+          </div>
+        </div>
+=======
             <div x-show="filteredSearchProducts.length === 0" class="p-3 text-center text-xs text-slate-400">
               Produk tidak ditemukan.
             </div>
           </div>
         </div>
 
->>>>>>> REPLACE
-
-<<<<<<< SEARCH
-            <button type="button" :disabled="!postForm.produk_id || !postForm.tanggal_rencana || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
+        <!-- Manajemen Link Affiliate Shopee / URL Tujuan -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700" x-text="currentPlatform === 'Meta Ads' ? 'URL Tujuan Iklan (Otomatis dari Link Affiliate)' : 'Tautan Affiliate Shopee'"></span>
+              <div class="text-[11px] text-slate-500">
+                <template x-if="postForm.link_affiliate">
+                  <span class="text-emerald-700 font-mono truncate block max-w-sm" x-text="postForm.link_affiliate"></span>
+                </template>
+                <template x-if="!postForm.link_affiliate">
+                  <span class="text-slate-400">Belum ada link affiliate yang tersimpan di draf ini.</span>
+                </template>
+              </div>
+            </div>
+            <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
               <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
               <span class="material-symbols-outlined text-xs">link</span>
               <span x-text="postForm.link_affiliate ? 'Ubah Link' : 'Tambah Link'"></span>
             </button>
+          </div>
+          <div x-show="postForm.kode_pelacakan" class="text-[11px] text-slate-600 flex items-center space-x-1">
+            <span>Kode pelacakan draf:</span>
+            <span class="font-mono font-bold text-blue-900" x-text="postForm.kode_pelacakan"></span>
+          </div>
+        </div>
 =======
             <button type="button" :disabled="!postForm.produk_id || !postForm.akun_id || isLoadingTrackingCode" @click="openAffiliateLinkModal()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 text-blue-900 text-xs font-semibold rounded flex items-center space-x-1">
               <span x-show="isLoadingTrackingCode" class="material-symbols-outlined animate-spin text-xs">progress_activity</span>
