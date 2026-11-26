@@ -225,21 +225,22 @@ function getInitialData() {
     const allProducts = getProductsInternal();
     const accounts = getAccountsInternal();
     const pRes = getProducts({ page: 1, pageSize: 25 });
-    const postRes = getPosts({ page: 1, pageSize: 25, status: ['draf', 'terjadwal', 'sudah tayang'] });
+    const postRes = getPosts({ page: 1, pageSize: 25, statusChip: 'draf' });
 
-    const todayWib = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+    const tz = 'Asia/Jakarta';
+    const todayWIB = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
     return {
       success: true,
       data: serializeForClient({
         settings: settings,
+        today_wib: todayWIB,
         allProducts: allProducts.map(function(p) {
           return { id: p.id, kode_produk: p.kode_produk, nama: p.nama, cover_url: p.cover_url, link_dashboard: p.link_dashboard };
         }),
         productsPage: pRes.data,
         postsPage: postRes.data,
-        accounts: accounts,
-        todayWib: todayWib
+        accounts: accounts
       })
     };
   } catch (err) {
@@ -1147,27 +1148,21 @@ function getPosts(params) {
     const q = String(params.q || '').toLowerCase().trim();
     const akunId = String(params.akun_id || '').trim();
     const showArchived = params.showArchived === true || String(params.showArchived) === 'true';
-    const statusChip = String(params.statusChip || '').toLowerCase().trim();
-    let statuses = Array.isArray(params.status) ? params.status : (params.status ? [params.status] : []);
+    let statusChip = String(params.statusChip || '').toLowerCase().trim();
+    if (!statusChip) {
+      statusChip = 'draf';
+    }
 
-    if (statusChip === 'terjadwal') {
+    let statuses = [];
+    if (statusChip === 'draf') {
+      statuses = ['draf'];
+    } else if (statusChip === 'terjadwal') {
       statuses = ['terjadwal'];
     } else if (statusChip === 'terbit' || statusChip === 'sudah tayang') {
       statuses = ['sudah tayang'];
-    } else if (statusChip === 'draf') {
-      statuses = ['draf'];
     } else if (statusChip === 'semua' || statusChip === 'all') {
       statuses = [];
     }
-
-    const dateFrom = String(params.dateFrom || '').trim();
-    const dateTo = String(params.dateTo || '').trim();
-    const dateChip = String(params.dateChip || '').trim();
-
-    const todayStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
-    const nextWeekDate = new Date();
-    nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-    const nextWeekStr = Utilities.formatDate(nextWeekDate, 'Asia/Jakarta', 'yyyy-MM-dd');
 
     let filtered = all.filter(function(p) {
       if (!showArchived && p.status === 'diarsipkan') return false;
@@ -1179,13 +1174,6 @@ function getPosts(params) {
         const matchHead = p.headline && p.headline.toLowerCase().indexOf(q) !== -1;
         if (!matchCode && !matchCap && !matchHead) return false;
       }
-      if (dateChip === 'today') {
-        if (p.tanggal_rencana !== todayStr) return false;
-      } else if (dateChip === 'this_week') {
-        if (!p.tanggal_rencana || p.tanggal_rencana < todayStr || p.tanggal_rencana > nextWeekStr) return false;
-      }
-      if (dateFrom && p.tanggal_rencana && p.tanggal_rencana < dateFrom) return false;
-      if (dateTo && p.tanggal_rencana && p.tanggal_rencana > dateTo) return false;
       return true;
     });
 
@@ -1330,41 +1318,65 @@ function getPostDetail(postId) {
   }
 }
 
-// Helper ambil urutan kode berikutnya dari sheet urutan_kode (menggunakan LockService)
-function incrementTrackingCodeCounter(ss, akunId, ddmmyy) {
-  let sheet = ss.getSheetByName('urutan_kode');
-  if (!sheet) {
-    sheet = ss.insertSheet('urutan_kode');
-    sheet.getRange(1, 1, 1, 3).setValues([['akun_id', 'tanggal_ddmmyy', 'nomor_terakhir']]);
+// Helper format tanggal dan waktu sekarang dalam zona waktu Asia/Jakarta (WIB)
+function getNowWIBString() {
+  return Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+}
+
+// Generator nomor urut per akun per tanggal WIB dengan tabel urutan_kode
+function getNextCounterTrackingCodeInternal(ss, akunId) {
+  let urutanSheet = ss.getSheetByName('urutan_kode');
+  if (!urutanSheet) {
+    urutanSheet = ss.insertSheet('urutan_kode');
+    urutanSheet.getRange(1, 1, 1, 3).setValues([['akun_id', 'tanggal_ddmmyy', 'nomor_terakhir']]);
   }
 
-  const data = sheet.getDataRange().getValues();
-  let rowIndex = -1;
-  let currentNum = 0;
+  const akunSheet = ss.getSheetByName('akun');
+  let kodeTag = 'DD';
+  if (akunSheet) {
+    const aData = akunSheet.getDataRange().getValues();
+    for (let a = 1; a < aData.length; a++) {
+      if (String(aData[a][0]) === String(akunId)) {
+        kodeTag = String(aData[a][3] || 'DD').toUpperCase();
+        break;
+      }
+    }
+  }
+  kodeTag = kodeTag.replace(/[^A-Z0-9]/g, '');
+  if (!kodeTag) kodeTag = 'DD';
+  if (kodeTag.length > 6) kodeTag = kodeTag.substring(0, 6);
 
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(akunId) && String(data[i][1]) === String(ddmmyy)) {
+  const tz = 'Asia/Jakarta';
+  const todayDDMMYY = Utilities.formatDate(new Date(), tz, 'ddMMyy');
+
+  const uData = urutanSheet.getDataRange().getValues();
+  let rowIndex = -1;
+  let lastNum = 0;
+
+  for (let i = 1; i < uData.length; i++) {
+    if (String(uData[i][0]) === String(akunId) && String(uData[i][1]) === todayDDMMYY) {
       rowIndex = i + 1;
-      currentNum = parseInt(data[i][2], 10) || 0;
+      lastNum = parseInt(uData[i][2], 10) || 0;
       break;
     }
   }
 
-  const nextNum = currentNum + 1;
+  const nextNum = lastNum + 1;
   if (rowIndex !== -1) {
-    sheet.getRange(rowIndex, 3).setValue(nextNum);
+    urutanSheet.getRange(rowIndex, 3).setValue(nextNum);
   } else {
-    sheet.appendRow([String(akunId), String(ddmmyy), nextNum]);
+    urutanSheet.appendRow([akunId, todayDDMMYY, nextNum]);
   }
 
-  return nextNum < 10 ? '0' + nextNum : String(nextNum);
+  const seqStr = nextNum < 10 ? '0' + nextNum : String(nextNum);
+  return todayDDMMYY + kodeTag + seqStr;
 }
 
-// Siapkan dan tetapkan kode pelacakan hari ini saat tombol Tambah Link diklik
-function prepareTrackingCodeForPost(postId, payloadIfNew) {
+// Alur pembuatan/pembaruan kode pelacakan dan langsung disimpan ke sheet
+function getOrGeneratePostTrackingCode(postId, akunId, draftPayload) {
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(15000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     let postSheet = ss.getSheetByName('postingan');
     if (!postSheet) {
@@ -1372,129 +1384,89 @@ function prepareTrackingCodeForPost(postId, payloadIfNew) {
       postSheet = ss.getSheetByName('postingan');
     }
 
-    const todayDDMMYY = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'ddMMyy');
-    const nowWibStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss'+07:00'");
-    let targetRowIndex = -1;
-    let existingCode = '';
-    let existingLink = '';
-    let targetAkunId = '';
-    let effectivePostId = postId;
-
-    if (effectivePostId) {
+    let rowIndex = -1;
+    let postRow = null;
+    if (postId) {
       const data = postSheet.getDataRange().getValues();
       for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]) === String(effectivePostId)) {
-          targetRowIndex = i + 1;
-          existingCode = String(data[i][6] || '').trim();
-          existingLink = String(data[i][7] || '').trim();
-          targetAkunId = String(data[i][13] || '').trim();
+        if (String(data[i][0]) === String(postId)) {
+          rowIndex = i + 1;
+          postRow = data[i];
           break;
         }
       }
-    }
-
-    // Jika post belum pernah disimpan (id kosong), simpan draf ke sheet terlebih dahulu
-    if (targetRowIndex === -1) {
-      if (!payloadIfNew || !payloadIfNew.produk_id || !payloadIfNew.akun_id) {
-        return { success: false, message: 'Pilih akun dan produk terlebih dahulu.' };
-      }
-      targetAkunId = String(payloadIfNew.akun_id).trim();
-      effectivePostId = 'post_' + Utilities.getUuid();
-
-      const newRow = [
-        effectivePostId,
-        payloadIfNew.produk_id,
-        Array.isArray(payloadIfNew.media_ids) ? payloadIfNew.media_ids.join(',') : '',
-        payloadIfNew.tipe || 'TEKS',
-        '', // tanggal_rencana kosong untuk draf
-        '', // jam_tayang kosong untuk draf
-        '', // kode_pelacakan diisi di bawah
-        '', // link_affiliate kosong
-        payloadIfNew.caption || '',
-        'draf',
-        '', // url_postingan
-        nowWibStr,
-        nowWibStr,
-        targetAkunId,
-        payloadIfNew.headline || '',
-        payloadIfNew.deskripsi || '',
-        payloadIfNew.cta_tombol || 'Belanja Sekarang',
-        payloadIfNew.komentar_pertama || ''
-      ];
-      postSheet.appendRow(newRow);
-      targetRowIndex = postSheet.getLastRow();
-      existingCode = '';
-      existingLink = '';
     }
 
     // Jika baris sudah punya kode DAN link sudah terisi: kode tidak boleh berubah
-    if (existingCode && existingLink) {
-      return {
-        success: true,
-        data: {
-          postId: effectivePostId,
-          code: existingCode,
-          link: existingLink,
-          isNew: false
-        }
-      };
-    }
-
-    // Jika belum punya kode ATAU kode ada tapi link masih kosong: buat kode baru dari penghitung hari ini
-    let kodeTag = 'DD';
-    const akunSheet = ss.getSheetByName('akun');
-    if (akunSheet && targetAkunId) {
-      const aData = akunSheet.getDataRange().getValues();
-      for (let a = 1; a < aData.length; a++) {
-        if (String(aData[a][0]) === String(targetAkunId)) {
-          kodeTag = String(aData[a][3] || 'DD').toUpperCase().replace(/[^A-Z0-9]/g, '');
-          break;
-        }
+    if (rowIndex !== -1 && postRow) {
+      const existingCode = String(postRow[6] || '').trim();
+      const existingLink = String(postRow[7] || '').trim();
+      if (existingCode && existingLink) {
+        return { success: true, data: { id: postId, code: existingCode, isNew: false } };
       }
     }
-    if (!kodeTag) kodeTag = 'DD';
-    if (kodeTag.length > 6) kodeTag = kodeTag.substring(0, 6);
 
-    const seqStr = incrementTrackingCodeCounter(ss, targetAkunId, todayDDMMYY);
-    const newTrackingCode = todayDDMMYY + kodeTag + seqStr;
+    const targetAkunId = akunId || (postRow ? String(postRow[13] || '') : '');
+    if (!targetAkunId) {
+      return { success: false, message: 'Pilih akun terlebih dahulu.' };
+    }
 
-    // LANGSUNG simpan kode itu ke baris postingan di sheet
-    postSheet.getRange(targetRowIndex, 7).setValue(newTrackingCode);
-    postSheet.getRange(targetRowIndex, 13).setValue(nowWibStr);
-    invalidateProductCache();
+    // Buat kode baru dengan penghitung WIB
+    const newCode = getNextCounterTrackingCodeInternal(ss, targetAkunId);
+    const nowStr = getNowWIBString();
 
-    return {
-      success: true,
-      data: {
-        postId: effectivePostId,
-        code: newTrackingCode,
-        link: existingLink,
-        isNew: true
-      }
-    };
+    if (rowIndex !== -1) {
+      // Ganti kode lama atau set kode pertama kali pada baris yang sudah ada
+      postSheet.getRange(rowIndex, 7).setValue(newCode);
+      postSheet.getRange(rowIndex, 13).setValue(nowStr);
+      return { success: true, data: { id: postId, code: newCode, isNew: true } };
+    } else {
+      // Jika baris draf belum dibuat di sheet, simpan draf baru langsung ke baris
+      const newId = 'post_' + Utilities.getUuid();
+      const p = draftPayload || {};
+      postSheet.appendRow([
+        newId,
+        p.produk_id || '',
+        Array.isArray(p.media_ids) ? p.media_ids.join(',') : String(p.media_ids || ''),
+        p.tipe || 'TEKS',
+        '', // tanggal_rencana kosong untuk draf
+        '', // jam_tayang kosong untuk draf
+        newCode,
+        '', // link_affiliate kosong
+        p.caption || '',
+        'draf',
+        '', // url_postingan
+        nowStr,
+        nowStr,
+        targetAkunId,
+        p.headline || '',
+        p.deskripsi || '',
+        p.cta_tombol || 'Belanja Sekarang',
+        p.komentar_pertama || ''
+      ]);
+      return { success: true, data: { id: newId, code: newCode, isNew: true } };
+    }
   } catch (err) {
-    return { success: false, message: 'Gagal menyiapkan kode pelacakan: ' + err.message };
+    return { success: false, message: 'Gagal memproses kode pelacakan: ' + err.message };
   } finally {
     lock.releaseLock();
   }
 }
 
-// Simpan tautan affiliate dari modal khusus link
-function saveAffiliateLink(postId, affiliateLink) {
+// Simpan link affiliate langsung ke baris postingan
+function saveAffiliateLink(postId, link) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName('postingan');
     if (!sheet) return { success: false, message: 'Sheet postingan tidak ditemukan.' };
-    const data = sheet.getDataRange().getValues();
-    const nowWibStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss'+07:00'");
 
+    const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(postId)) {
-        sheet.getRange(i + 1, 8).setValue(String(affiliateLink || '').trim());
-        sheet.getRange(i + 1, 13).setValue(nowWibStr);
-        invalidateProductCache();
+        sheet.getRange(i + 1, 8).setValue(String(link || '').trim());
+        sheet.getRange(i + 1, 13).setValue(getNowWIBString());
         return { success: true, message: 'Link affiliate berhasil disimpan.' };
       }
     }
@@ -1594,7 +1566,7 @@ function savePost(payload) {
 
     const data = sheet.getDataRange().getValues();
     const isEdit = payload.id && String(payload.id).trim() !== '';
-    const nowWibStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss'+07:00'");
+    const nowStr = new Date().toISOString();
     const mediaIdsJoined = selectedMediaIds.join(',');
 
     // Kosongkan isian yang tidak dipakai oleh platform akun terpilih
@@ -1636,12 +1608,51 @@ function savePost(payload) {
           return { success: false, message: 'Postingan yang sudah terbit bersifat hanya-baca dan tidak dapat diubah.' };
         }
 
-        // Draf disimpan dengan tanggal_rencana dan jam_tayang kosong
-        let tglVal = '';
-        let jamVal = '';
-        if (existingStatus === 'terjadwal') {
-          tglVal = String(existingRow[4] || '');
-          jamVal = String(existingRow[5] || '');
+        // Server mengosongkan tanggal dan jam jika status draf
+        let tglVal = payload.tanggal_rencana || '';
+        let jamVal = payload.jam_tayang || '';
+        if (existingStatus === 'draf') {
+          tglVal = '';
+          jamVal = '';
+        }
+
+        // Jika postingan terjadwal diubah jadwal/akunnya, cek kuota harian kembali
+        const oldTgl = String(existingRow[4] || '');
+        const oldJam = String(existingRow[5] || '');
+        const oldAkun = String(existingRow[13] || '');
+        const newTgl = String(payload.tanggal_rencana || '');
+        const newJam = String(jamVal || '');
+        const targetAkun = String(payload.akun_id || oldAkun);
+
+        if (existingStatus === 'terjadwal' && (oldTgl !== newTgl || oldJam !== newJam || oldAkun !== targetAkun)) {
+          let limit = 3;
+          let accName = 'Akun';
+          const akunSheet = ss.getSheetByName('akun');
+          if (akunSheet && targetAkun) {
+            const aData = akunSheet.getDataRange().getValues();
+            for (let a = 1; a < aData.length; a++) {
+              if (String(aData[a][0]) === targetAkun) {
+                accName = String(aData[a][1] || 'Akun');
+                limit = parseInt(aData[a][4], 10) || 3;
+                break;
+              }
+            }
+          }
+
+          let count = 0;
+          for (let j = 1; j < data.length; j++) {
+            if (j + 1 === rowIndex) continue;
+            const st = String(data[j][9] || '');
+            const rowTgl = String(data[j][4] || '');
+            const rowAkunId = String(data[j][13] || '');
+            if ((st === 'terjadwal' || st === 'sudah tayang') && rowTgl.indexOf(newTgl) !== -1 && (!targetAkun || rowAkunId === targetAkun)) {
+              count++;
+            }
+          }
+
+          if (count >= limit) {
+            return { success: false, message: 'Kuota harian akun ' + accName + ' untuk ' + newTgl + ' sudah penuh (' + count + '/' + limit + ').' };
+          }
         }
 
         sheet.getRange(rowIndex, 2, 1, 9).setValues([[
@@ -1650,12 +1661,12 @@ function savePost(payload) {
           finalTipe,
           tglVal,
           jamVal,
-          existingRow[6], // kode_pelacakan lama tidak pernah berubah
+          existingRow[6], // kode_pelacakan lama tetap dipertahankan
           payload.link_affiliate || '',
           payload.caption || '',
           existingStatus
         ]]);
-        sheet.getRange(rowIndex, 13).setValue(nowWibStr);
+        sheet.getRange(rowIndex, 13).setValue(getNowWIBString());
         if (payload.akun_id) {
           sheet.getRange(rowIndex, 14).setValue(payload.akun_id);
         }
@@ -1675,23 +1686,35 @@ function savePost(payload) {
       }
     }
 
-    // Simpan Postingan Baru (draf selalu dengan tanggal dan jam kosong)
+    // Simpan Postingan Baru (status draf: jam dibuang)
     const trackingCode = String(payload.kode_pelacakan || '').trim();
+    if (trackingCode) {
+      for (let j = 1; j < data.length; j++) {
+        if (String(data[j][6]).trim() === trackingCode) {
+          return {
+            success: false,
+            message: 'Kode ' + trackingCode + ' sudah dipakai. Tutup form dan buka lagi untuk mendapat kode baru.'
+          };
+        }
+      }
+    }
+
     const newId = 'post_' + Utilities.getUuid();
+    const nowWib = getNowWIBString();
     sheet.appendRow([
       newId,
       payload.produk_id,
       finalMediaIds,
       finalTipe,
-      '', // draf: tanggal_rencana kosong
-      '', // draf: jam_tayang kosong
+      '', // draf: tanggal rencana kosong
+      '', // draf: jam tidak diisi
       trackingCode,
       payload.link_affiliate || '',
       payload.caption || '',
       'draf',
       '', // url_postingan
-      nowWibStr,
-      nowWibStr,
+      nowWib,
+      nowWib,
       payload.akun_id || '',
       finalHeadline,
       finalDeskripsi,
@@ -1746,25 +1769,18 @@ function updatePostStatus(postId, newStatus, extraData) {
     }
 
     let finalStatus = newStatus;
-    const nowWibStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', "yyyy-MM-dd'T'HH:mm:ss'+07:00'");
+    const nowStr = new Date().toISOString();
 
     if (newStatus === 'terjadwal') {
       const tgl = extraData && extraData.tanggal_rencana ? String(extraData.tanggal_rencana).trim() : String(postRow[4] || '').trim();
       const jam = extraData && extraData.jam_tayang ? String(extraData.jam_tayang).trim() : String(postRow[5] || '').trim();
       const postAkunId = extraData && extraData.akun_id ? String(extraData.akun_id).trim() : String(postRow[13] || '').trim();
 
-      if (!String(postRow[6] || '').trim()) {
-        return { success: false, message: 'Kode pelacakan wajib ada sebelum menjadwalkan.' };
-      }
-      if (!String(postRow[7] || '').trim()) {
-        return { success: false, message: 'Link affiliate wajib diisi sebelum menjadwalkan.' };
-      }
-      if (!String(postRow[8] || '').trim()) {
-        return { success: false, message: 'Caption wajib diisi sebelum menjadwalkan.' };
-      }
-
       if (!tgl || !jam) {
         return { success: false, message: 'Tanggal dan jam tayang wajib diisi untuk menjadwalkan.' };
+      }
+      if (!String(postRow[6] || '').trim()) {
+        return { success: false, message: 'Kode pelacakan wajib ada sebelum menjadwalkan.' };
       }
       if (!String(postRow[7] || '').trim()) {
         return { success: false, message: 'Link affiliate wajib diisi sebelum menjadwalkan.' };
@@ -1830,7 +1846,7 @@ function updatePostStatus(postId, newStatus, extraData) {
     }
 
     sheet.getRange(rowIndex, 10).setValue(finalStatus);
-    sheet.getRange(rowIndex, 13).setValue(nowWibStr);
+    sheet.getRange(rowIndex, 13).setValue(getNowWIBString());
     invalidateProductCache();
 
     return { success: true, message: 'Status berhasil diperbarui.', data: { status: finalStatus } };
